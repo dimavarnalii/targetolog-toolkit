@@ -194,12 +194,13 @@ footer p{margin:0 0 8px}
 /* квіз */
 .qpage{min-height:100vh;display:grid;background:radial-gradient(900px 600px at 100% 0,color-mix(in srgb,var(--ac) 22%,transparent),transparent 70%),radial-gradient(700px 500px at 0 100%,color-mix(in srgb,var(--ac2) 16%,transparent),transparent 70%),var(--bg2)}
 .bold .qpage{background:var(--bg2)}
-.qm{display:grid;gap:26px;align-items:center;padding:30px 20px 60px;width:min(1120px,100%);margin:0 auto}
-@media(min-width:940px){.qm{grid-template-columns:1fr 1.08fr;gap:56px;padding-top:50px}}
-.qside h1{font-size:clamp(30px,4.6vw,48px);margin-bottom:14px}
-.qside p.sub{font-size:19px;color:var(--mut);margin-bottom:20px}
-.qextra{display:none}
-@media(max-width:939px){.dsk{display:none}.qextra{display:block}.qside p.sub{margin-bottom:0}}
+.qpage{align-items:center}
+.qm{display:grid;gap:26px;align-items:start;align-content:start;padding:30px 20px 60px;width:min(1120px,100%);margin:0 auto}
+@media(min-width:940px){.qm{grid-template-columns:1fr 1.08fr;grid-template-areas:"head card" "extra card";column-gap:56px;row-gap:0;padding-top:50px}
+.qhead{grid-area:head;align-self:end}.qcard{grid-area:card;align-self:center}.qextra{grid-area:extra;align-self:start}}
+.qhead h1{font-size:clamp(30px,4.6vw,48px);margin-bottom:14px}
+.qhead p.sub{font-size:19px;color:var(--mut);margin-bottom:20px}
+@media(max-width:939px){.qhead p.sub{margin-bottom:0}}
 .mgr{display:flex;gap:14px;align-items:center;background:var(--card);border:var(--bw) solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:22px;box-shadow:var(--sh);max-width:430px}
 .mgr .av{width:52px;height:52px;font-size:20px}.mgr small{color:var(--mut);display:block}
 .bonus{display:flex;gap:14px;align-items:center;background:linear-gradient(135deg,var(--ac),var(--ac2));color:var(--on);border-radius:var(--r);padding:16px 18px;margin-top:22px;max-width:430px}
@@ -344,6 +345,7 @@ def fix_url(v):
     """Лише додає https:// до t.me/... і tel:/mailto: залишає; решту не чіпає."""
     v = str(v).strip()
     if re.match(r"^(t\.me|telegram\.me)/", v): return "https://" + v
+    if v.startswith("@"): return "https://t.me/" + v[1:]
     return v
 
 def pixel_snippet(b):
@@ -386,7 +388,12 @@ def footer(b):
     if c.get("address"): parts.append(E(c["address"]))
     if c.get("hours"): parts.append(E(c["hours"]))
     priv = f'<p>{E(l["privacy_text"])}</p>' if l.get("privacy_text") else ""
-    return f'<footer><div class="w"><p>{" · ".join(parts)}</p>{priv}</div></footer>'
+    links = ""
+    if b.get("format") == "quiz":  # у квізі немає блоку з контактами, тож телефон і Telegram даємо у футері
+        if c.get("phone"): links += f'<a href="tel:{E(re.sub(r"[^+0-9]", "", c["phone"]))}">{E(c["phone"])}</a>'
+        if c.get("telegram"): links += (" · " if links else "") + f'<a href="{E(tg_link(c["telegram"]))}">Telegram</a>'
+        links = f'<p>{links}</p>' if links else ""
+    return f'<footer><div class="w">{links}<p>{" · ".join(parts)}</p>{priv}</div></footer>'
 
 def top(b, nav=True):
     c = b.get("contact", {})
@@ -513,11 +520,13 @@ def build_quiz(b):
     bonus = f'<div class="bonus">{ic("gift")}<div><b>{E(bn["title"])}</b><span>{E(bn["text"])}</span></div></div>' if bn else ""
     mark = f'<span class="logo">{E(b["brand"][:1].upper())}</span>'
     extra = f'{side}{bonus}{mgr}'
-    return (f'<div class="qpage"><div class="qm"><div class="qside"><a class="brand" href="#" style="margin-bottom:26px;display:flex">{mark}<span>{E(b["brand"])}</span></a>'
+    # один елемент кожного блоку: на комп'ютері ліворуч під заголовком, на телефоні під карткою (CSS grid areas)
+    hint = f'<span>{E(z["time_hint"])}</span>' if z.get("time_hint") else "<span></span>"
+    return (f'<div class="qpage"><div class="qm"><div class="qhead"><a class="brand" href="#" style="margin-bottom:26px;display:flex">{mark}<span>{E(b["brand"])}</span></a>'
             + (f'<span class="eyebrow">{E(z["eyebrow"])}</span>' if z.get("eyebrow") else "")
-            + f'<h1>{emph(z["title"])}</h1><p class="sub">{E(z["intro"])}</p><div class="dsk">{extra}</div></div>'
-            f'<div class="qcard"><div class="qtop"><span id="qlab"></span><span>~1 хв</span></div><div class="bar"><i id="qbar"></i></div><div id="qbox"></div></div>'
-            f'<div class="qextra">{extra}</div></div></div>')
+            + f'<h1>{emph(z["title"])}</h1><p class="sub">{E(z["intro"])}</p></div>'
+            f'<div class="qcard"><div class="qtop"><span id="qlab"></span>{hint}</div><div class="bar"><i id="qbar"></i></div><div id="qbox"></div></div>'
+            + (f'<div class="qextra">{extra}</div>' if extra else "") + '</div></div>')
 
 # ---------------------------------------------------------------- збірка
 def theme_css(b):
@@ -541,7 +550,7 @@ def build(b, out):
         z = b["quiz"]
         body = build_quiz(b)
         end = json.dumps({"t": z["end_title"], "d": z["end_text"], "b": b["form"]["button"], "c": b["form"]["consent"],
-                          "unlock": z.get("unlock", "Розрахунок готовий. Залишилось вказати, куди його надіслати."),
+                          "unlock": z.get("unlock", "Останній крок: вкажіть контакти."),
                           "icon": ic("gift")}, ensure_ascii=False)
         qs = json.dumps([{"q": x["q"], "options": x["options"]} for x in z["questions"]], ensure_ascii=False)
         js = JS_COMMON.replace("__CFG__", cfg) + JS_QUIZ.replace("__QUIZ__", qs).replace("__END__", end)
@@ -570,7 +579,8 @@ def build(b, out):
     nxt = f'<div class="next">{nxt}</div>' if nxt else ""
     tbtn = (f'<p style="margin-top:26px"><a class="btn" href="{E(fix_url(t["button_url"]))}">{E(t.get("button", "Написати в Telegram"))}{ic("send")}</a></p>' if t.get("button_url") else "")
     tbody = (f'<main class="ty"><div><div class="tick">{ic("check")}</div><h1 style="font-size:clamp(28px,5vw,44px)">{E(t.get("title", "Дякуємо! Заявку отримано"))}</h1>'
-             f'<p class="mut" style="font-size:19px;max-width:520px;margin:14px auto 0">{E(t.get("text", "Ми зв’яжемося з вами найближчим часом."))}</p>{nxt}{tbtn}</div></main>')
+             + (f'<p class="mut" style="font-size:19px;max-width:520px;margin:14px auto 0">{E(t["text"])}</p>' if t.get("text") else "")
+             + f'{nxt}{tbtn}</div></main>')
     tp = (head(b, "Дякуємо", "", css) + f'<body class="{cls.strip()}">' + top(b, nav=False) + tbody
           + f"<script>{THANKS_JS.replace('__PIXEL__', px)}</script></body></html>")
     open(os.path.join(out, "thanks.html"), "w", encoding="utf8").write(tp)
