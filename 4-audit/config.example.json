@@ -1,0 +1,28 @@
+{
+  "client_name": "Назва клієнта",
+  "client_name_anonymized": "Інтернет-магазин «Приклад»",
+  "anonymize": false,
+
+  "ad_account_id": "act_1234567890",
+  "period_start": "2026-08-20",
+  "period_end": "2026-11-18",
+  "currency": "USD",
+
+  "site_url": "https://example.com/",
+  "margin_percent": null,
+
+  "data_dir": "data",
+  "work_dir": "work",
+  "output": "audit.docx",
+
+  "api_version": "v23.0",
+  "token_env": "META_TOKEN",
+  "purchase_action": "purchase",
+
+  "min_spend_for_conclusion": 50,
+  "concentration_warn_pct": 30,
+  "frequency_warn": 6,
+  "video_name_patterns": ["vid", "video", "reels", "відео"],
+  "lookalike_name_patterns": ["lal", "lookalike"],
+  "retargeting_name_patterns": ["retarget", "remarket", "ретаргет", "rt_"]
+}

@@ -1,0 +1,22 @@
+{
+  "creatives": [
+    {
+      "name": "K1_example",
+      "source": "proxy/IMG_0001.mp4",
+      "words": "IMG_0001.words_m.json",
+      "exclude": [[0, 15.7]],
+      "fixes": {"неправильне": "правильне"},
+      "fix_at": [[18.18, "слово"]],
+      "inject": [[10.0, 12.0, "фраза яку medium пропустив"]],
+      "keywords": ["основа1", "основа2", "100"],
+      "hook": "ПЕРШИЙ РЯДОК\n*АКЦЕНТ*",
+      "hook_dur": 4.5,
+      "music_vol": 0.1,
+      "cutaways": [
+        {"at": 16.4, "dur": 1.8, "file": "lib/category/clip_name", "ss": 2.0},
+        {"at": 29.2, "dur": 2.0, "file": "px/IMG_0002", "ss": 3.0},
+        {"at": 40.0, "dur": 1.6, "file": "/absolute/path/to/broll.mp4", "ss": 1.0}
+      ]
+    }
+  ]
+}
