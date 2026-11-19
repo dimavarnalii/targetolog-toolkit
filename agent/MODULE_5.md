@@ -17,12 +17,13 @@
 - Формат: лендинг (простий оффер) чи квіз (дорогий/індивідуальний продукт); тема style: fresh | dark | warm | bold; колір accent; логотип, фото; телефон, Telegram, юр. назва.
 
 ## STEPS
-- 1) Створи папку клієнта з brief.json (за зразком у examples/). Фото в img/ поруч. Заголовки: акцентне слово в **...**.
-- 2) python 5-landing/build_landing.py brief.json   → out/index.html, out/thanks.html. Скрипт відхилить заглушки (TODO, XXX) і довгий H1.
-- 3) python 5-landing/check_page.py out/   (КРИТИЧНО / УВАГА / ОК)
-- 4) python 5-landing/selftest.py brief.json   (потрібен Chrome; перевіряє форму, телефон, UTM, квіз)
+- 1) Створи папку клієнта ПОЗА папкою набору (наприклад client/). У ній brief.json за зразком з 5-landing/examples/ (landing, landing_dark, landing_warm, landing_bold, quiz) і за потреби img/ з фото.
+-    Правила брифу: акцентне слово в заголовку в **...**; блоки крім hero необов'язкові (немає в брифі = немає на сторінці); contact.telegram: https://t.me/name або @name; form.secure лише якщо користувач сам дав такий текст.
+- 2) З папки клієнта: python -X utf8 <TOOLKIT>/5-landing/build_landing.py brief.json --out out   → out/index.html, out/thanks.html. Скрипт відхилить заглушки (TODO, XXX) і довгий H1.
+- 3) python -X utf8 <TOOLKIT>/5-landing/check_page.py out/   (КРИТИЧНО / УВАГА / ОК)
+- 4) python -X utf8 <TOOLKIT>/5-landing/selftest.py brief.json   (потрібен Chrome: у PATH, CHROME_PATH або аргументом; перевіряє форму, телефон, UTM, квіз)
 - 5) Користувач: Google Таблиця, Apps Script, код з lead_endpoint.gs, Веб-застосунок (доступ: Усі); адресу /exec у tracking.endpoint; ID пікселя в tracking.pixel_id. BOT_TOKEN лише у Script Properties.
-- 6) Перезбери, повтори перевірки. Публікація: папку out/ на статичний хостинг (Cloudflare Pages, Netlify, GitHub Pages) лише за згодою користувача.
+- 6) Перезбери, повтори перевірки. Публікація: папку out/ повністю (lead_endpoint.gs у ній немає: його користувач бере з <TOOLKIT>/5-landing/ і вставляє в Apps Script) на статичний хостинг (Cloudflare Pages, Netlify, GitHub Pages) лише за згодою користувача.
 
 ## VERIFY (перед рекламою)
 - Тестова заявка з телефону: рядок у таблиці з UTM, повідомлення в Telegram. Events Manager, Test Events: PageView на сторінці й Lead після заявки.

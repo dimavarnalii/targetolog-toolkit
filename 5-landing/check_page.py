@@ -4,6 +4,9 @@
 import os, re, sys, json
 from html.parser import HTMLParser
 
+for _s in (sys.stdout, sys.stderr):  # кирилиця у виводі на Windows
+    try: _s.reconfigure(encoding="utf-8")
+    except Exception: pass
 d = sys.argv[1] if len(sys.argv) > 1 else "out"
 res = []
 def add(level, text): res.append((level, text))
@@ -54,7 +57,7 @@ if not p.form and 'id="qbox"' not in idx: add("КРИТИЧНО", "Немає ф
 if p.ext: add("УВАГА", "Зовнішні ресурси гальмують сторінку: " + ", ".join(sorted(set(p.ext))[:4]))
 vis = re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", idx, flags=re.S)
 if re.search(r"(TODO|\bXXX\b|lorem|\[\.\.\.\])", vis, re.I) and "0XX" not in vis.replace("0XX XXX XX XX", ""): add("КРИТИЧНО", "У сторінці лишились заглушки")
-if "вигадані" in idx.lower() or "демо" in idx.lower(): add("УВАГА", "Є позначки «демо/вигадані дані»: приберіть перед запуском")
+if re.search(r"вигадан|демо-дан|демо-відгук|демо-сторінк|дані для прикладу", vis, re.I): add("УВАГА", "Є позначки «демо/вигадані дані» у тексті: приберіть перед запуском")
 if "noindex" in idx: add("ОК", "Сторінка закрита від індексації (рекламна сторінка)")
 
 # Політика реклами та довіра: лише підказки для перевірки людиною, не вердикт

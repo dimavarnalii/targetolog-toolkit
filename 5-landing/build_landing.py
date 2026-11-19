@@ -3,7 +3,8 @@
 
 Запуск:  python build_landing.py brief.json            (результат у папці out/)
          python build_landing.py brief.json --out my    (інша папка)
-Результат: index.html, thanks.html, lead_endpoint.gs, папка img/ (якщо є зображення).
+Результат у папці out/: index.html, thanks.html і img/ (якщо є зображення). Усю папку out/ можна публікувати.
+Файл lead_endpoint.gs у out/ не копіюється: його вставляють в Google Apps Script (див. README).
 Весь CSS і JS вбудовані; шрифти системні, сторінка не залежить від зовнішніх бібліотек.
 """
 import argparse, colorsys, html, json, os, re, shutil, sys
@@ -331,10 +332,24 @@ def need(b, path):
         cur = cur[p]
     return cur
 
+def tg_link(v):
+    """t.me/name, @name або name -> повне https://t.me/name; готове посилання лишаємо."""
+    v = str(v).strip()
+    if re.match(r"^https?://", v): return v
+    if v.startswith("@"): return "https://t.me/" + v[1:]
+    if re.match(r"^(t\.me|telegram\.me)/", v): return "https://" + v
+    return "https://t.me/" + v
+
+def fix_url(v):
+    """Лише додає https:// до t.me/... і tel:/mailto: залишає; решту не чіпає."""
+    v = str(v).strip()
+    if re.match(r"^(t\.me|telegram\.me)/", v): return "https://" + v
+    return v
+
 def pixel_snippet(b):
     pid = (b.get("tracking") or {}).get("pixel_id", "")
     if pid and not re.fullmatch(r"\d{8,20}", str(pid)):
-        sys.exit("pixel_id має бути числом (15-16 цифр), без букв.")
+        sys.exit("pixel_id має бути числом (зазвичай 15-16 цифр, допускається 8-20), без букв.")
     return PIXEL.replace("__PID__", str(pid)) if pid else ""
 
 def cta(b, where, target="#order", label=None, cls=""):
@@ -351,7 +366,8 @@ def form_html(b, fid=None, note=True):
     if "comment" in fields:
         rows += '<div><label>Що вас цікавить</label><input type="text" name="comment"></div>'
     idattr = f' id="{fid}"' if fid else ""
-    sec = f'<div class="secure">{ic("lock")}<span>Дані не передаємо третім особам</span></div>' if note else ""
+    # рядок під формою береться ЛИШЕ з брифу (form.secure): жодних тверджень про клієнта, яких він не давав
+    sec = f'<div class="secure">{ic("lock")}<span>{E(f["secure"])}</span></div>' if (note and f.get("secure")) else ""
     return (f'<form{idattr} class="lead" novalidate>{rows}<input class="hp" type="text" name="website" tabindex="-1" autocomplete="off">'
             f'<button class="btn wide" type="submit">{E(f["button"])}{ic("arrow")}</button><div class="err"></div>'
             f'<div class="consent">{E(f["consent"])}</div>{sec}</form>')
@@ -474,7 +490,7 @@ def sec_final(b):
     f = b["form"]; c = b.get("contact", {}); fin = b.get("final", {})
     cl = ""
     if c.get("phone"): cl += f'<a href="tel:{E(re.sub(r"[^+0-9]", "", c["phone"]))}">{ic("phone")}{E(c["phone"])}</a>'
-    if c.get("telegram"): cl += f'<a href="{E(c["telegram"])}">{ic("send")}Telegram</a>'
+    if c.get("telegram"): cl += f'<a href="{E(tg_link(c["telegram"]))}">{ic("send")}Telegram</a>'
     cl = f'<div class="contactline">{cl}</div>' if cl else ""
     return (f'<section class="final" id="order"><div class="w"><div class="g"><div><h2>{emph(fin.get("title", f["title"]))}</h2>'
             f'<p>{E(fin.get("text", ""))}</p>{cl}</div>{form_card(b, None, f["title"], f.get("subtitle"))}</div></div></section>')
@@ -552,7 +568,7 @@ def build(b, out):
     for k, x in enumerate(t.get("next", []), 1):
         nxt += f'<div><b class="n">{k}</b><span>{E(x)}</span></div>'
     nxt = f'<div class="next">{nxt}</div>' if nxt else ""
-    tbtn = (f'<p style="margin-top:26px"><a class="btn" href="{E(t["button_url"])}">{E(t.get("button", "Написати в Telegram"))}{ic("send")}</a></p>' if t.get("button_url") else "")
+    tbtn = (f'<p style="margin-top:26px"><a class="btn" href="{E(fix_url(t["button_url"]))}">{E(t.get("button", "Написати в Telegram"))}{ic("send")}</a></p>' if t.get("button_url") else "")
     tbody = (f'<main class="ty"><div><div class="tick">{ic("check")}</div><h1 style="font-size:clamp(28px,5vw,44px)">{E(t.get("title", "Дякуємо! Заявку отримано"))}</h1>'
              f'<p class="mut" style="font-size:19px;max-width:520px;margin:14px auto 0">{E(t.get("text", "Ми зв’яжемося з вами найближчим часом."))}</p>{nxt}{tbtn}</div></main>')
     tp = (head(b, "Дякуємо", "", css) + f'<body class="{cls.strip()}">' + top(b, nav=False) + tbody
@@ -561,9 +577,7 @@ def build(b, out):
     src = os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])), "img")
     if os.path.isdir(src):
         shutil.copytree(src, os.path.join(out, "img"), dirs_exist_ok=True)
-    gs = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lead_endpoint.gs")
-    if os.path.exists(gs):
-        shutil.copy(gs, out)
+    # lead_endpoint.gs у out/ НЕ копіюємо: out/ публікується на хостинг, а скрипт приймача лише для Google Apps Script
     return len(page.encode("utf8"))
 
 def validate(b):
@@ -589,6 +603,9 @@ def validate(b):
     return errs
 
 if __name__ == "__main__":
+    for _s in (sys.stdout, sys.stderr):  # кирилиця у виводі на Windows
+        try: _s.reconfigure(encoding="utf-8")
+        except Exception: pass
     ap = argparse.ArgumentParser()
     ap.add_argument("brief")
     ap.add_argument("--out", default="out")

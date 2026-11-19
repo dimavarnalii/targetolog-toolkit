@@ -9,11 +9,28 @@ import json, os, re, subprocess, sys, tempfile, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_landing as B
 
-CHROME = sys.argv[2] if len(sys.argv) > 2 else next(
-    (p for p in [r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                 r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                 "/usr/bin/google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
-     if os.path.exists(p)), None)
+for _s in (sys.stdout, sys.stderr):  # кирилиця у виводі на Windows
+    try: _s.reconfigure(encoding="utf-8")
+    except Exception: pass
+
+def find_chrome():
+    """Порядок: аргумент 2, змінна CHROME_PATH, PATH, типові місця (Windows, macOS, Linux)."""
+    if len(sys.argv) > 2: return sys.argv[2]
+    if os.environ.get("CHROME_PATH"): return os.environ["CHROME_PATH"]
+    for n in ("chrome", "google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        w = shutil.which(n)
+        if w: return w
+    local = os.environ.get("LOCALAPPDATA", "")
+    for p in [r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+              os.path.join(local, r"Google\Chrome\Application\chrome.exe"),
+              "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]:
+        if os.path.exists(p): return p
+    return None
+
+CHROME = find_chrome()
+if not CHROME:
+    sys.exit("Chrome не знайдено. Вкажіть шлях: python selftest.py brief.json <шлях_до_chrome> або змінна CHROME_PATH.")
 
 STUB = "<script>window.__sent=null;window.fetch=function(u,o){window.__sent=Object.fromEntries(new URLSearchParams(o.body.toString()));return Promise.resolve()};</script>"
 
@@ -73,7 +90,8 @@ setTimeout(function(){
 
 def main():
     b = json.load(open(sys.argv[1], encoding="utf-8-sig"))
-    b.setdefault("tracking", {}).update({"endpoint": "https://example.invalid/exec", "thanks_url": "#done"})
+    # у тесті піксель вимкнено: перевіряємо логіку сторінки, а Chrome не ходить у мережу за скриптом пікселя
+    b.setdefault("tracking", {}).update({"endpoint": "https://example.invalid/exec", "thanks_url": "#done", "pixel_id": ""})
     tmp = tempfile.mkdtemp(prefix="lk_")
     B.sys.argv = [sys.argv[0], sys.argv[1]]
     B.build(b, tmp)
@@ -89,7 +107,9 @@ def main():
     m = re.search(r"<title>(.*?)</title>", r.stdout, re.S)
     res = m.group(1) if m else "немає результату"
     print(res.replace("&amp;", "&"))
-    shutil.rmtree(tmp, ignore_errors=True); shutil.rmtree(prof, ignore_errors=True)
+    for _d in (tmp, prof):
+        try: shutil.rmtree(_d)
+        except OSError as e: print(f"Увага: не вдалося видалити тимчасову папку {_d}: {e}")
     sys.exit(1 if "FAIL" in res or "EXC" in res or res == "немає результату" else 0)
 
 main()
