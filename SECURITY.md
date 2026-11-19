@@ -13,13 +13,14 @@
 
 | Файл | Куди | Навіщо | Дані |
 |---|---|---|---|
+| `1-dashboard/fetch_facts.py` | graph.facebook.com (Meta Marketing API) | зчитати щоденну статистику кабінетів | ваш токен із змінної `META_TOKEN`; лише запити читання (GET); пише файли в папку `out/` |
 | `4-audit/fetch_meta.py` | graph.facebook.com (Meta Marketing API) | зчитати статистику кабінету | ваш токен із змінної `META_TOKEN`; лише запити читання (GET) |
 | `4-audit/site_check.py` | сайт клієнта; googleapis.com (PageSpeed Insights) | перевірити сторінку | адреса сайту; необов'язковий ключ `PSI_API_KEY` |
 | `2-video/scripts/yt_fetch.py` | через стороннього `yt-dlp` | завантажити відео за посиланням, яке ви дали | лише це посилання; режим необов'язковий |
 | `5-landing/lead_endpoint.gs` | api.telegram.org | надіслати вам заявку в Telegram | працює в ВАШОМУ Google-акаунті, токен бота у ваших Script Properties |
 | згенерована сторінка `index.html` | connect.facebook.net; ваш endpoint | піксель Meta і прийом заявок | лише якщо ви вказали `pixel_id` і `endpoint` |
 
-Решта скриптів до мережі не звертається.
+Решта скриптів до мережі не звертається. Сторінка `1-dashboard/page.html` не містить зовнішніх адрес: вона працює всередині артефакта Claude й читає лише його набори даних.
 
 ## Що запускається на вашому комп'ютері
 

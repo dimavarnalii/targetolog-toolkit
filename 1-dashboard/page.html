@@ -1,0 +1,904 @@
+<meta name="dash-one-writer">
+<style>
+  /* Layout: Vercel-like. Hairline borders, joined KPI strip with a coloured glow per metric, mono numerals,
+     one panel at a time under an underline tab strip. Per-metric accent palette. */
+  .md {
+    --md-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --md-radius: 12px;
+    --c-spend: #f59e0b; --c-res: #3b82f6; --c-roas: #8b5cf6; --c-ok: #10b981; --c-cpr: #06b6d4; --c-pink: #ec4899;
+    max-width: 1180px; margin: 0 auto; color: var(--color-fg);
+    font-family: "Geist", var(--font-anthropic-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.45; letter-spacing: -0.006em;
+  }
+  .md * { box-sizing: border-box; }
+  .md h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.1; margin: 6px 0 10px; }
+  .md h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .md h3 { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--color-fg-muted); margin: 0 0 8px; }
+  .md p { margin: 0; }
+  .md b { font-weight: 600; }
+  .md-num { font-family: var(--md-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .md-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 2px 10px; }
+  .md-eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c-spend); }
+  .md-head { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+  .md-head > div:first-child { min-width: 0; flex: 1 1 440px; }
+  .md-lead { max-width: 72ch; color: var(--color-fg-muted); }
+  .md-lead b { color: var(--color-fg); font-family: var(--md-mono); font-weight: 500; font-size: 13px; letter-spacing: -0.03em; }
+  .md-ctl { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: 100%; }
+  .md-seg { display: inline-flex; flex-wrap: wrap; padding: 2px; gap: 2px; border: 1px solid var(--color-border-line); border-radius: 8px; background: var(--color-panel); }
+  .md-seg button { border: 0; background: transparent; color: var(--color-fg-muted); padding: 6px 12px; font: inherit; border-radius: 6px; cursor: pointer; }
+  .md-seg button:hover { color: var(--color-fg); }
+  .md-seg button[aria-pressed="true"] { background: var(--color-bg); color: var(--color-fg); font-weight: 500; box-shadow: 0 0 0 1px var(--color-border-line); }
+  .md-dates { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .md-dates[hidden] { display: none; }
+  .md input[type="date"], .md input[type="search"] { border: 1px solid var(--color-border-line); background: var(--color-bg); color: var(--color-fg); border-radius: 8px; padding: 6px 10px; font: inherit; font-family: var(--md-mono); font-size: 13px; min-width: 0; }
+  .md input[type="search"] { font-family: inherit; width: 240px; max-width: 100%; }
+  .md-rangelabel { font-size: 12px; color: var(--color-fg-muted); }
+  .md button:focus-visible, .md input:focus-visible, .md tr:focus-visible { outline: 2px solid var(--c-res); outline-offset: 2px; }
+  .md-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border-line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; margin-bottom: 20px; }
+  .md-tabs button { border: 0; background: transparent; color: var(--color-fg-muted); padding: 10px 12px; font: inherit; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .md-tabs button:hover { color: var(--color-fg); }
+  .md-tabs button[aria-selected="true"] { color: var(--color-fg); font-weight: 500; border-bottom-color: var(--color-fg); }
+  .md-panel { display: flex; flex-direction: column; gap: 16px; }
+  .md-panel[hidden] { display: none; }
+  .md-card { position: relative; overflow: hidden; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--md-radius); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0;
+    background-image: linear-gradient(160deg, color-mix(in srgb, var(--c-res) 6%, transparent), color-mix(in srgb, var(--c-roas) 3%, transparent) 60%, transparent); }
+  .md-card-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+  .md-sub { color: var(--color-fg-muted); font-size: 12px; }
+  .md-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 1px; background: var(--color-border-line); border: 1px solid var(--color-border-line); border-radius: var(--md-radius); overflow: hidden; }
+  .md-kpi { --acc: var(--c-res); position: relative; background: var(--color-panel); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-height: 112px; min-width: 0;
+    background-image: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--acc) 16%, transparent), transparent 65%); }
+  .md-kpi-l { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--color-fg-muted); }
+  .md-kpi-l::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); }
+  .md-kpi-v { font-size: 28px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; min-height: 31px; font-variant-numeric: tabular-nums; }
+  .md-kpi-f { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--color-fg-muted); margin-top: auto; }
+  .md-d.is-good { color: var(--c-ok); } .md-d.is-bad { color: var(--color-bad); }
+  .md-alerts { display: flex; flex-direction: column; margin: 0 -20px -20px; padding: 0; list-style: none; border-top: 1px solid var(--color-border-line); }
+  .md-alert { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--color-border-line); }
+  .md-alert:last-child { border-bottom: 0; }
+  .md-alert i { width: 8px; height: 8px; border-radius: 50%; background: var(--c-spend); }
+  .md-alert.is-bad i { background: var(--color-bad); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-bad) 18%, transparent); }
+  .md-alert b { display: block; font-weight: 500; overflow-wrap: anywhere; }
+  .md-alert span { color: var(--color-fg-muted); font-size: 13px; overflow-wrap: anywhere; }
+  .md-link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--color-fg-muted); cursor: pointer; }
+  .md-link:hover { color: var(--color-fg); }
+  .md-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--color-fg-muted); }
+  .md-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .md-chart { position: relative; min-height: 260px; }
+  .md-chart svg { display: block; width: 100%; height: auto; }
+  .md-chart text { fill: var(--cds-text-secondary, var(--color-fg-muted)); font-size: 11px; font-family: var(--md-mono); }
+  .md-tip { position: absolute; pointer-events: none; z-index: 2; padding: 8px 10px; font-size: 12px; line-height: 1.5; white-space: nowrap; background: var(--cds-surface-popover, var(--color-panel)); border: 1px solid var(--cds-border, var(--color-border-line)); box-shadow: var(--cds-shadow-popover, 0 4px 16px rgba(0,0,0,.18)); color: var(--cds-text-secondary, var(--color-fg)); border-radius: 8px; }
+  .md-tip[hidden] { display: none; }
+  .md-tw { overflow: auto; margin: 0 -20px -20px; border-top: 1px solid var(--color-border-line); }
+  .md table { border-collapse: collapse; width: 100%; min-width: 780px; }
+  .md th { position: sticky; top: 0; font-size: 12px; font-weight: 500; color: var(--color-fg-muted); text-align: right; padding: 10px 14px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; background: var(--color-panel); }
+  .md td { padding: 11px 14px; border-bottom: 1px solid var(--color-border-line); text-align: right; vertical-align: middle; font-family: var(--md-mono); font-size: 13px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; white-space: nowrap; }
+  .md th:first-child, .md td:first-child { text-align: left; padding-left: 20px; }
+  .md th:last-child, .md td:last-child { padding-right: 20px; }
+  .md td:first-child { font-family: inherit; font-size: 14px; letter-spacing: -0.006em; white-space: normal; min-width: 240px; max-width: 380px; overflow-wrap: anywhere; }
+  .md tbody tr:last-child td { border-bottom: 0; }
+  .md tr.is-click { cursor: pointer; }
+  .md tr.is-click:hover td { background: color-mix(in srgb, var(--color-fg) 4%, transparent); }
+  .md td small { display: block; color: var(--color-fg-muted); font-size: 12px; margin-top: 1px; }
+  .md-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 0; }
+  .md tr.md-grp td { background: color-mix(in srgb, var(--color-fg) 4%, transparent); padding: 10px 20px; border-bottom: 1px solid var(--color-border-line); }
+  .md tr.md-grp td:first-child { max-width: none; min-width: 0; white-space: normal; }
+  .md-grp-in { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-family: inherit; }
+  .md-grp-in b { font-size: 14px; font-weight: 600; }
+  .md-grp-in span { color: var(--color-fg-muted); font-family: var(--md-mono); font-size: 12px; }
+  .md-bar { display: inline-block; vertical-align: middle; width: 48px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--color-fg) 10%, transparent); margin-right: 8px; overflow: hidden; }
+  .md-bar i { display: block; height: 100%; background: var(--c-res); border-radius: 2px; }
+  .md-pill { display: inline-flex; align-items: center; gap: 6px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; font-family: "Geist", var(--font-anthropic-sans), system-ui, sans-serif; letter-spacing: 0; border: 1px solid var(--color-border-line); color: var(--color-fg); white-space: nowrap; }
+  .md-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-fg-muted); }
+  .md-pill.is-good::before { background: var(--c-ok); }
+  .md-pill.is-warn::before { background: var(--c-spend); }
+  .md-pill.is-bad { background: color-mix(in srgb, var(--color-bad) 9%, transparent); border-color: color-mix(in srgb, var(--color-bad) 35%, var(--color-border-line)); }
+  .md-pill.is-bad::before { background: var(--color-bad); }
+  .md-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+  .md-crumbs button, .md-chips button { border: 1px solid var(--color-border-line); background: transparent; color: var(--color-fg); border-radius: 999px; padding: 3px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+  .md-crumbs button:hover, .md-chips button:hover { background: color-mix(in srgb, var(--color-fg) 5%, transparent); }
+  .md-crumbs button[aria-current="true"], .md-chips button[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+  .md-crumbs span { color: var(--color-fg-muted); }
+  .md-tools { display: flex; flex-direction: column; gap: 10px; }
+  .md-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .md-rp-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .md-rp-top p { font-size: 15px; max-width: 72ch; }
+  .md-projs { display: flex; flex-direction: column; gap: 12px; }
+  .md-proj { border: 1px solid var(--color-border-line); border-radius: 10px; padding: 16px; min-width: 0; background: color-mix(in srgb, var(--color-bg) 55%, transparent); }
+  .md-proj-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 4px; }
+  .md-proj-h b { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .md-proj-m { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 14px; font-size: 12px; color: var(--color-fg-muted); }
+  .md-proj-m span b { font-family: var(--md-mono); font-weight: 500; color: var(--color-fg); }
+  .md-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .md-col { min-width: 0; border-top: 2px solid var(--color-border-line); padding-top: 8px; }
+  .md-col.is-good { border-top-color: var(--c-ok); } .md-col.is-warn { border-top-color: var(--c-spend); } .md-col.is-bad { border-top-color: var(--color-bad); }
+  .md-item { padding: 8px 0; border-bottom: 1px solid var(--color-border-line); }
+  .md-item:last-child { border-bottom: 0; }
+  .md-item b { display: block; font-weight: 500; overflow-wrap: anywhere; }
+  .md-item p { color: var(--color-fg-muted); font-size: 13px; }
+  .md-empty { color: var(--color-fg-muted); font-size: 13px; padding: 6px 0; }
+  .md details { color: var(--color-fg-muted); font-size: 13px; }
+  .md summary { cursor: pointer; }
+  .md details p { margin-top: 8px; max-width: 78ch; }
+  @media (max-width: 600px) { .md h1 { font-size: 24px; } .md-kpi-v { font-size: 24px; } .md-card { padding: 16px; } .md-tw, .md-alerts { margin-inline: -16px; margin-bottom: -16px; } .md-alert { padding-inline: 16px; } .md-ctl { align-items: flex-start; } }
+  @media (prefers-reduced-motion: no-preference) { .md-panel { animation: md-in var(--cds-dur-slow, 200ms) var(--cds-ease-out, ease-out); } @keyframes md-in { from { opacity: 0.4; } to { opacity: 1; } } }
+</style>
+
+<div class="md">
+  <header class="md-head">
+    <div>
+      <span class="md-eyebrow">Демо · усі проєкти й цифри вигадані</span>
+      <h1 id="top">Реклама Meta</h1>
+      <p class="md-lead">За період <b data-draw="lead_range">—</b> витрачено <b data-draw="lead_spend">—</b> у <b data-draw="lead_n">—</b>. Потребують уваги: <b data-draw="lead_off">—</b>. Креативів, що вигорають: <b data-draw="lead_fat">—</b>.</p>
+    </div>
+    <div class="md-ctl">
+      <div class="md-seg" id="period" role="group" aria-label="Період">
+        <button type="button" data-range="today" aria-pressed="false">Сьогодні</button>
+        <button type="button" data-range="7" aria-pressed="false">7 днів</button>
+        <button type="button" data-range="14" aria-pressed="true">14 днів</button>
+        <button type="button" data-range="custom" aria-pressed="false">Свій період</button>
+      </div>
+      <div class="md-dates" id="custom-dates" hidden>
+        <input type="date" id="rg-from" min="2026-10-22" max="2026-11-18" aria-label="З дати">
+        <span class="md-sub">—</span>
+        <input type="date" id="rg-to" min="2026-10-22" max="2026-11-18" aria-label="По дату">
+      </div>
+      <span class="md-rangelabel" data-draw="range_label"></span>
+    </div>
+  </header>
+
+  <nav class="md-tabs" role="tablist" aria-label="Розділи">
+    <button type="button" role="tab" data-tab="overview" aria-selected="true">Огляд</button>
+    <button type="button" role="tab" data-tab="campaigns" aria-selected="false">Проєкти й кампанії</button>
+    <button type="button" role="tab" data-tab="creatives" aria-selected="false">Креативи</button>
+    <button type="button" role="tab" data-tab="daily" aria-selected="false">Звіт за день</button>
+    <button type="button" role="tab" data-tab="weekly" aria-selected="false">Звіт за тиждень</button>
+  </nav>
+
+  <!-- ОГЛЯД -->
+  <section class="md-panel" id="overview">
+    <div class="md-kpis" data-draw="kpi_tiles"></div>
+
+    <div class="md-card" id="alerts">
+      <div class="md-card-h">
+        <h2>Критичні моменти</h2>
+        <button type="button" class="md-link" data-goto="creatives">Усі креативи →</button>
+      </div>
+      <ul class="md-alerts" data-draw="alert_list"></ul>
+    </div>
+
+    <div class="md-card" id="chart-card">
+      <div class="md-card-h">
+        <h2>Витрати по днях і проєктах</h2>
+        <div class="md-legend" data-draw="chart_legend"></div>
+      </div>
+      <div class="md-chart" data-source="daily_proj" data-draw="chart_daily"></div>
+    </div>
+
+    <div class="md-card" id="projects-card">
+      <div class="md-card-h">
+        <h2>Проєкти й клієнти</h2>
+        <span class="md-sub">Бюджет, оплата клієнта й LTV вводяться вручну: Meta цих даних не віддає</span>
+      </div>
+      <div class="md-tw">
+        <table data-source="portfolio" data-row-key="project">
+          <thead><tr>
+            <th data-field="project">Проєкт</th>
+            <th data-field="spend">Витрати</th>
+            <th>Частка</th>
+            <th>До попереднього</th>
+            <th data-field="budget_used">Бюджет місяця</th>
+            <th data-field="monthly_fee">Оплата, на міс.</th>
+            <th data-field="ltv">LTV</th>
+            <th>Увага</th>
+          </tr></thead>
+          <tbody data-draw="t_projects"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ПРОЄКТИ Й КАМПАНІЇ -->
+  <section class="md-panel" id="campaigns" hidden>
+    <div class="md-card">
+      <div class="md-card-h">
+        <h2>Проєкт, кампанія, група, оголошення</h2>
+        <span class="md-sub">Натисніть на рядок, щоб відкрити наступний рівень</span>
+      </div>
+      <div class="md-crumbs" data-draw="crumbs"></div>
+      <div class="md-tw">
+        <table>
+          <thead><tr>
+            <th>Назва</th><th>Витрати</th><th>Частка</th><th>Результати</th><th>Ціна результату</th><th>CTR</th><th>CPM</th><th>До попереднього</th><th>Статус</th>
+          </tr></thead>
+          <tbody data-draw="tree_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- КРЕАТИВИ -->
+  <section class="md-panel" id="creatives" hidden>
+    <div class="md-kpis" data-draw="cr_tiles"></div>
+    <div class="md-card">
+      <div class="md-card-h">
+        <h2>Креативи за проєктами</h2>
+        <span class="md-sub">У кожному проєкті спершу ті, що потребують дії</span>
+      </div>
+      <div class="md-tools">
+        <div class="md-chips" data-draw="cr_project" role="group" aria-label="Проєкт"></div>
+        <div class="md-chips" data-draw="cr_filter" role="group" aria-label="Статус"></div>
+        <input type="search" id="cr-q" placeholder="Пошук за назвою креативу" aria-label="Пошук креативів">
+      </div>
+      <div class="md-tw">
+        <table data-source="ads" data-row-key="key">
+          <thead><tr>
+            <th>Креатив</th>
+            <th data-field="spend">Витрати</th>
+            <th data-field="results">Результати</th>
+            <th data-field="cpr">Ціна результату</th>
+            <th data-field="l3_cpr">За 3 дні</th>
+            <th>До попереднього</th>
+            <th>ROAS</th>
+            <th>Статус</th>
+          </tr></thead>
+          <tbody data-draw="cr_body"></tbody>
+        </table>
+      </div>
+    </div>
+    <details>
+      <summary>Як рахуються статуси</summary>
+      <p>Статуси рахуються за останні щонайменше 7 днів, навіть якщо вибрано «Сьогодні». Вигорає: за останні 3 дні ціна результату гірша за ціну за період більш ніж на третину (або витрати є, а результатів немає). Росте або погіршується: ціна результату змінилась на 15% і більше проти такого самого попереднього періоду. Без результату: від 30 доларів витрат і жодного результату. Новий: у попередньому періоді майже не було витрат. Мало даних: менше 20 доларів витрат.</p>
+    </details>
+  </section>
+
+  <!-- ЗВІТ ЗА ДЕНЬ -->
+  <section class="md-panel" id="daily" hidden>
+    <div class="md-card">
+      <div class="md-card-h">
+        <h2>Звіт за вчора</h2>
+        <span class="md-sub">Готується щодня о 11:45 за Києвом із даних Meta, поради пише Claude</span>
+      </div>
+      <div class="md-rp-top"><span data-draw="rp_daily_verdict"></span><p data-draw="rp_daily_headline"></p></div>
+      <div class="md-projs" data-draw="rp_daily_projects"></div>
+    </div>
+  </section>
+
+  <!-- ЗВІТ ЗА ТИЖДЕНЬ -->
+  <section class="md-panel" id="weekly" hidden>
+    <div class="md-card">
+      <div class="md-card-h">
+        <h2>Звіт за тиждень</h2>
+        <span class="md-sub">Готується щопонеділка о 12:00 за Києвом, підсумок минулих 7 днів</span>
+      </div>
+      <div class="md-rp-top"><span data-draw="rp_weekly_verdict"></span><p data-draw="rp_weekly_headline"></p></div>
+      <div class="md-projs" data-draw="rp_weekly_projects"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  // ---------- helpers ----------
+  const num = (v) => Number(v) || 0;
+  const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const span = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1;
+  const nf0 = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 });
+  const nf2 = new Intl.NumberFormat('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const usd = (n) => (n == null ? '—' : '$' + nf0.format(Math.round(n)));
+  const usd2 = (n) => (n == null ? '—' : '$' + nf2.format(n));
+  const pct1 = (n) => (n == null ? '—' : (n * 100).toFixed(1).replace('.', ',') + '%');
+  const signed = (v) => (v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(Math.round(v * 100)) + '%');
+  const fmtDay = d3.utcFormat('%d.%m');
+  const dayLabel = (s) => fmtDay(new Date(s + 'T00:00:00Z'));
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const ok = (id) => { const d = dash.data(id); return d.status === 'ok' ? d.data : null; };
+  const one = (id) => { const r = ok(id); return r && r.length ? r[0] : null; };
+  const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+  const projColor = (name) => { const list = ok('projects') || []; const i = list.findIndex((p) => p.project === name); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
+  const dot = (name) => { const d = el('span', 'md-dot'); d.style.background = projColor(name); return d; };
+
+  const AD_ST = {
+    fatigue: ['Вигорає', 'is-bad'], zero: ['Без результату', 'is-bad'], down: ['Погіршується', 'is-warn'],
+    up: ['Росте', 'is-good'], flat: ['Стабільно', ''], new: ['Новий', ''], low: ['Мало даних', ''],
+  };
+  const TG_ST = { ok: ['У цілі', 'is-good'], warn: ['Біля цілі', 'is-warn'], bad: ['Поза ціллю', 'is-bad'], none: ['Без результату', 'is-bad'] };
+  const RANK = { fatigue: 0, zero: 1, down: 2, up: 3, new: 4, flat: 5, low: 6 };
+
+  function targetState(cpr, target, spend, results) {
+    if (!results) return spend >= 30 ? 'none' : 'warn';
+    if (cpr <= target) return 'ok';
+    return cpr <= target * 1.2 ? 'warn' : 'bad';
+  }
+
+  // ---------- calcs ----------
+  dash.calc('range', {
+    inputs: ['facts'],
+    title: 'Вибраний період',
+    description: 'Початок і кінець вибраного періоду та такий самий попередній період. «Сьогодні» означає останній день у даних.',
+    fn: (facts) => {
+      const end = facts.reduce((m, r) => (r.date > m ? r.date : m), '');
+      const min = facts.reduce((m, r) => (m === '' || r.date < m ? r.date : m), '');
+      if (!end) return [];
+      const p = dash.params() || {};
+      const preset = ['today', '7', '14', 'custom'].includes(String(p.range)) ? String(p.range) : '14';
+      let s = addDays(end, -13), e = end;
+      if (preset === 'today') s = end;
+      else if (preset === '7') s = addDays(end, -6);
+      else if (preset === 'custom' && p.from && p.to && p.from <= p.to) { s = p.from < min ? min : p.from; e = p.to > end ? end : p.to; if (s > e) s = e; }
+      const len = span(s, e);
+      return [{ preset, s, e, len, ps: addDays(s, -len), pe: addDays(s, -1), min, max: end }];
+    },
+  });
+
+  dash.calc('ads', {
+    inputs: ['facts', 'projects', 'range'],
+    title: 'Оголошення: період, попередній період, 3 дні',
+    description: 'Кожне оголошення за вибраний період і за такий самий попередній. Статус рахується за останні щонайменше 7 днів за ціною результату.',
+    fn: (facts, projects, range) => {
+      const rg = range[0];
+      if (!rg) return [];
+      const m = Math.max(rg.len, 7);
+      const es = addDays(rg.e, -(m - 1)), eps = addDays(es, -m), epe = addDays(es, -1), l3 = addDays(rg.e, -2);
+      const from = rg.ps < eps ? rg.ps : eps;
+      const meta = {}; projects.forEach((p) => { meta[p.project] = p; });
+      const map = new Map();
+      for (const r of facts) {
+        if (r.date < from || r.date > rg.e) continue;
+        const key = r.project + ' | ' + r.campaign + ' | ' + r.adset + ' | ' + r.ad;
+        let o = map.get(key);
+        if (!o) {
+          const mt = meta[r.project] || {};
+          o = { key, project: r.project, campaign: r.campaign, adset: r.adset, ad: r.ad, type: mt.type || 'lead', result_label: mt.result_label || 'Результати', target_cpr: num(mt.target_cpr),
+            spend: 0, results: 0, revenue: 0, impressions: 0, clicks: 0, p_spend: 0, p_results: 0, p_revenue: 0, l3_spend: 0, l3_results: 0, e_spend: 0, e_results: 0, e_p_spend: 0, e_p_results: 0 };
+          map.set(key, o);
+        }
+        const sp = num(r.spend), rs = num(r.results);
+        if (r.date >= rg.s) { o.spend += sp; o.results += rs; o.revenue += num(r.revenue); o.impressions += num(r.impressions); o.clicks += num(r.clicks); }
+        else if (r.date >= rg.ps && r.date <= rg.pe) { o.p_spend += sp; o.p_results += rs; o.p_revenue += num(r.revenue); }
+        if (r.date >= es) { o.e_spend += sp; o.e_results += rs; } else if (r.date >= eps && r.date <= epe) { o.e_p_spend += sp; o.e_p_results += rs; }
+        if (r.date >= l3) { o.l3_spend += sp; o.l3_results += rs; }
+      }
+      const out = [];
+      for (const o of map.values()) {
+        if (o.spend <= 0) continue;
+        o.cpr = o.results ? o.spend / o.results : null;
+        o.p_cpr = o.p_results ? o.p_spend / o.p_results : null;
+        o.l3_cpr = o.l3_results ? o.l3_spend / o.l3_results : null;
+        o.ctr = o.impressions ? o.clicks / o.impressions : null;
+        o.cpm = o.impressions ? (o.spend / o.impressions) * 1000 : null;
+        o.roas = o.type === 'purchase' && o.spend ? o.revenue / o.spend : null;
+        o.chg = o.cpr != null && o.p_cpr != null ? o.cpr / o.p_cpr - 1 : null;
+        const ecpr = o.e_results ? o.e_spend / o.e_results : null;
+        const epc = o.e_p_results ? o.e_p_spend / o.e_p_results : null;
+        const echg = ecpr != null && epc != null ? ecpr / epc - 1 : null;
+        let st = 'flat';
+        if (o.e_spend < 20) st = 'low';
+        else if (o.e_results === 0 && o.e_spend >= 30) st = 'zero';
+        else if (o.e_p_spend < 10) st = 'new';
+        else if (o.l3_spend >= 8 && ecpr != null && (o.l3_results === 0 || o.l3_cpr > ecpr * 1.33)) st = 'fatigue';
+        else if (echg != null && echg <= -0.15) st = 'up';
+        else if (echg != null && echg >= 0.15) st = 'down';
+        o.status = st;
+        out.push(o);
+      }
+      return out;
+    },
+  });
+
+  function group(ads, keyOf) {
+    const total = ads.reduce((a, o) => a + o.spend, 0);
+    const map = new Map();
+    for (const o of ads) {
+      const k = keyOf(o);
+      let g = map.get(k);
+      if (!g) { g = { name: k.split(' | ').pop(), project: o.project, campaign: o.campaign, adset: o.adset, type: o.type, target_cpr: o.target_cpr, spend: 0, results: 0, revenue: 0, impressions: 0, clicks: 0, p_spend: 0, p_results: 0, p_revenue: 0, n_ads: 0, n_fatigue: 0 }; map.set(k, g); }
+      g.spend += o.spend; g.results += o.results; g.revenue += o.revenue; g.impressions += o.impressions; g.clicks += o.clicks;
+      g.p_spend += o.p_spend; g.p_results += o.p_results; g.p_revenue += o.p_revenue; g.n_ads += 1; if (o.status === 'fatigue') g.n_fatigue += 1;
+    }
+    return [...map.values()].map((g) => {
+      g.cpr = g.results ? g.spend / g.results : null;
+      g.p_cpr = g.p_results ? g.p_spend / g.p_results : null;
+      g.chg = g.cpr != null && g.p_cpr != null ? g.cpr / g.p_cpr - 1 : null;
+      g.ctr = g.impressions ? g.clicks / g.impressions : null;
+      g.cpm = g.impressions ? (g.spend / g.impressions) * 1000 : null;
+      g.roas = g.type === 'purchase' && g.spend ? g.revenue / g.spend : null;
+      g.share = total ? g.spend / total : 0;
+      g.state = targetState(g.cpr, g.target_cpr, g.spend, g.results);
+      return g;
+    }).sort((a, b) => b.spend - a.spend);
+  }
+
+  dash.calc('by_project', {
+    inputs: ['ads'],
+    title: 'Підсумок по проєктах',
+    description: 'Суми оголошень по кожному проєкту за період і за попередній період; ціль задана в проєкті.',
+    fn: (ads) => group(ads, (o) => o.project).map((g) => ({ ...g, project: g.name })),
+  });
+  dash.calc('by_campaign', {
+    inputs: ['ads'],
+    title: 'Підсумок по кампаніях',
+    description: 'Суми оголошень по кожній кампанії проєкту.',
+    fn: (ads) => group(ads, (o) => o.project + ' | ' + o.campaign),
+  });
+  dash.calc('by_adset', {
+    inputs: ['ads'],
+    title: 'Підсумок по групах оголошень',
+    description: 'Суми оголошень по кожній групі в кампанії.',
+    fn: (ads) => group(ads, (o) => o.project + ' | ' + o.campaign + ' | ' + o.adset),
+  });
+
+  dash.calc('daily', {
+    inputs: ['facts', 'range'],
+    title: 'Усі проєкти по днях',
+    description: 'Витрати й результати всіх проєктів за кожен день вибраного періоду.',
+    fn: (facts, range) => {
+      const rg = range[0];
+      if (!rg) return [];
+      const map = new Map();
+      for (const r of facts) {
+        if (r.date < rg.s || r.date > rg.e) continue;
+        const o = map.get(r.date) || { date: r.date, spend: 0, results: 0, revenue: 0 };
+        o.spend += num(r.spend); o.results += num(r.results); o.revenue += num(r.revenue);
+        map.set(r.date, o);
+      }
+      return [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1)).map((o) => ({ ...o, cpr: o.results ? o.spend / o.results : null }));
+    },
+  });
+
+  dash.calc('kpis', {
+    inputs: ['ads', 'by_project'],
+    title: 'Підсумок і зміна',
+    description: 'Загальні витрати, результати, ціна результату й ROAS магазинів за період і за попередній період; лічильники креативів і проєктів поза ціллю.',
+    fn: (ads, byProject) => {
+      const t = { spend: 0, results: 0, p_spend: 0, p_results: 0, rev: 0, r_spend: 0, p_rev: 0, p_r_spend: 0, n_active: 0, n_fatigue: 0, n_zero: 0, n_up: 0, n_off: 0 };
+      for (const o of ads) {
+        t.spend += o.spend; t.results += o.results; t.p_spend += o.p_spend; t.p_results += o.p_results;
+        if (o.type === 'purchase') { t.rev += o.revenue; t.r_spend += o.spend; t.p_rev += o.p_revenue; t.p_r_spend += o.p_spend; }
+        if (o.e_spend >= 20) t.n_active += 1;
+        if (o.status === 'fatigue') t.n_fatigue += 1;
+        if (o.status === 'zero') t.n_zero += 1;
+        if (o.status === 'up') t.n_up += 1;
+      }
+      t.n_off = byProject.filter((p) => p.state === 'bad' || p.state === 'none').length;
+      t.cpr = t.results ? t.spend / t.results : null;
+      t.p_cpr = t.p_results ? t.p_spend / t.p_results : null;
+      t.roas = t.r_spend ? t.rev / t.r_spend : null;
+      t.p_roas = t.p_r_spend ? t.p_rev / t.p_r_spend : null;
+      return [t];
+    },
+  });
+
+  // Портфель: зведення по проєктах-клієнтах. Бюджет, оплата й дата початку (clients) вводяться вручну, у Meta їх немає.
+  dash.calc('portfolio', {
+    inputs: ['by_project', 'clients', 'facts', 'range'],
+    title: 'Портфель проєктів',
+    description: 'По кожному проєкту: витрати за період, використання місячного бюджету, оплата клієнта й LTV (оплата × повних місяців співпраці). Бюджет, оплата й дати внесені вручну.',
+    fn: (byProject, clients, facts, range) => {
+      const rg = range[0];
+      if (!rg) return [];
+      const month = rg.e.slice(0, 7), mStart = month + '-01';
+      const dim = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
+      const elapsed = +rg.e.slice(8, 10), timeShare = elapsed / dim;
+      const total = byProject.reduce((a, p) => a + p.spend, 0);
+      const meta = {}; clients.forEach((c) => { meta[c.project] = c; });
+      return byProject.map((p) => {
+        const c = meta[p.project] || {};
+        let mtd = 0;
+        for (const r of facts) if (r.project === p.project && r.date >= mStart && r.date <= rg.e) mtd += num(r.spend);
+        const budget = num(c.monthly_budget);
+        const used = budget ? mtd / budget : null;
+        const pace = used != null ? used / timeShare : null;
+        const months = c.client_since ? Math.floor((Date.parse(c.until || rg.e) - Date.parse(c.client_since)) / (86400000 * 30.44)) : 0;
+        const reasons = [];
+        if (p.state === 'bad' || p.state === 'none') reasons.push(['Поза ціллю', 'is-bad']);
+        if (num(c.account_status) === 9) reasons.push(['Оплата кабінету', 'is-bad']);
+        if (pace != null && pace > 1.1) reasons.push(['Бюджет випереджає', 'is-warn']);
+        if (p.n_fatigue) reasons.push(['Вигорає: ' + p.n_fatigue, 'is-warn']);
+        return { project: p.project, spend: p.spend, p_spend: p.p_spend, d_spend: p.p_spend ? p.spend / p.p_spend - 1 : null, share: total ? p.spend / total : 0,
+          mtd, budget, budget_used: used, pace, time_share: timeShare, monthly_fee: num(c.monthly_fee), client_since: c.client_since || '', months, ltv: num(c.monthly_fee) * months,
+          account_status: num(c.account_status) || 1, n_fatigue: p.n_fatigue, reasons };
+      });
+    },
+  });
+
+  dash.calc('portfolio_kpis', {
+    inputs: ['portfolio', 'clients', 'range', 'kpis'],
+    title: 'Зведення портфеля',
+    description: 'Загальні витрати, кількість проєктів, використання місячного бюджету, MRR і LTV усіх клієнтів (включно з тими, що на паузі). До проєктів, що потребують уваги, входять поза ціллю, проблема з оплатою кабінету й бюджет, що випереджає місяць; креативи, що вигорають, рахуються окремою плиткою.',
+    fn: (portfolio, clients, range, kpis) => {
+      const rg = range[0], k = kpis[0];
+      if (!rg || !k) return [];
+      const act = clients.filter((c) => c.status === 'active');
+      const t = { spend: k.spend, p_spend: k.p_spend, per_day: k.spend / rg.len, len: rg.len, n_total: clients.length, n_active: act.length, n_paused: clients.length - act.length,
+        mtd: 0, budget: 0, time_share: 0, mrr: act.reduce((a, c) => a + num(c.monthly_fee), 0), ltv: 0, n_attention: 0, n_pay: 0, n_off: 0, n_budget: 0, n_fatigue: k.n_fatigue };
+      for (const p of portfolio) {
+        t.mtd += p.mtd; t.budget += p.budget; t.time_share = p.time_share;
+        if (p.reasons.some((r) => !r[0].startsWith('Вигорає'))) t.n_attention += 1;
+        if (p.account_status === 9) t.n_pay += 1;
+        if (p.reasons.some((r) => r[0] === 'Поза ціллю')) t.n_off += 1;
+        if (p.reasons.some((r) => r[0] === 'Бюджет випереджає')) t.n_budget += 1;
+      }
+      t.ltv = clients.reduce((a, c) => a + num(c.monthly_fee) * (c.client_since ? Math.floor((Date.parse(c.until || rg.e) - Date.parse(c.client_since)) / (86400000 * 30.44)) : 0), 0);
+      t.avg_ltv = clients.length ? t.ltv / clients.length : null;
+      t.budget_used = t.budget ? t.mtd / t.budget : null;
+      return [t];
+    },
+  });
+
+  dash.calc('daily_proj', {
+    inputs: ['facts', 'range', 'projects'],
+    title: 'Витрати по днях і проєктах',
+    description: 'Витрати кожного проєкту за кожен день вибраного періоду.',
+    fn: (facts, range, projects) => {
+      const rg = range[0];
+      if (!rg) return [];
+      const map = new Map();
+      for (const r of facts) {
+        if (r.date < rg.s || r.date > rg.e) continue;
+        const o = map.get(r.date) || { date: r.date, total: 0, by: {} };
+        const s = num(r.spend); o.total += s; o.by[r.project] = (o.by[r.project] || 0) + s;
+        map.set(r.date, o);
+      }
+      return [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+    },
+  });
+
+  dash.calc('alerts', {
+    inputs: ['ads', 'by_project', 'portfolio'],
+    title: 'Критичні моменти',
+    description: 'Проєкти поза ціллю, кабінети з проблемою оплати, бюджети, що випереджають місяць, креативи, що вигорають, і оголошення з витратами без результатів; найдорожчі зверху.',
+    fn: (ads, byProject, portfolio) => {
+      const out = [];
+      for (const p of portfolio) {
+        if (p.account_status === 9) out.push({ sev: 'bad', rank: 0, weight: p.spend, title: p.project + ': статус кабінету 9', detail: 'Проблема з оплатою, пільговий період. Читання даних працює, але попередьте клієнта: реклама може зупинитись.' });
+        if (p.pace != null && p.pace > 1.1) out.push({ sev: 'warn', rank: 2, weight: p.mtd, title: p.project + ': бюджет випереджає місяць', detail: 'Використано ' + Math.round(p.budget_used * 100) + '% бюджету, а місяця минуло ' + Math.round(p.time_share * 100) + '%.' });
+      }
+      for (const p of byProject) {
+        if (p.state === 'bad' || p.state === 'none') {
+          out.push({ sev: 'bad', rank: 0, weight: p.spend, title: p.project + ': поза ціллю',
+            detail: p.results ? 'Ціна результату ' + usd2(p.cpr) + ' при цілі ' + usd2(p.target_cpr) + '.' : 'Витрачено ' + usd(p.spend) + ' без результатів.' });
+        }
+      }
+      for (const o of ads) {
+        if (o.status === 'fatigue') {
+          out.push({ sev: 'bad', rank: 1, weight: o.spend, title: o.ad,
+            detail: o.project + ' · вигорає: за 3 дні ' + (o.l3_cpr != null ? usd2(o.l3_cpr) : 'без результатів') + ' проти ' + usd2(o.cpr) + ' за період.' });
+        } else if (o.status === 'zero') {
+          out.push({ sev: 'bad', rank: 1, weight: o.spend, title: o.ad, detail: o.project + ' · ' + usd(o.spend) + ' витрат без жодного результату.' });
+        } else if (o.status === 'down' && o.chg != null) {
+          out.push({ sev: 'warn', rank: 2, weight: o.spend, title: o.ad, detail: o.project + ' · ціна результату виросла на ' + Math.round(o.chg * 100) + '% проти попереднього періоду.' });
+        }
+      }
+      return out.sort((a, b) => a.rank - b.rank || b.weight - a.weight).slice(0, 8);
+    },
+  });
+
+  // Report windows are fixed to the last full days, independent of the period switch.
+  dash.calc('rp_projects', {
+    inputs: ['facts', 'projects'],
+    title: 'Звіти по проєктах',
+    description: 'Підсумок кожного проєкту за вчора (проти позавчора) і за минулі 7 днів (проти 7 днів до них). Сьогодні в звіти не входить, бо день ще не закінчився.',
+    fn: (facts, projects) => {
+      const end = facts.reduce((m, r) => (r.date > m ? r.date : m), '');
+      if (!end) return [];
+      const y = addDays(end, -1);
+      const wins = { daily: [y, y, addDays(y, -1), addDays(y, -1)], weekly: [addDays(y, -6), y, addDays(y, -13), addDays(y, -7)] };
+      const out = [];
+      for (const rep of ['daily', 'weekly']) {
+        const [s, e, ps, pe] = wins[rep];
+        for (const p of projects) {
+          const o = { report: rep, project: p.project, result_label: p.result_label, target_cpr: num(p.target_cpr), from: s, to: e, spend: 0, results: 0, p_spend: 0, p_results: 0 };
+          for (const r of facts) {
+            if (r.project !== p.project) continue;
+            if (r.date >= s && r.date <= e) { o.spend += num(r.spend); o.results += num(r.results); }
+            else if (r.date >= ps && r.date <= pe) { o.p_spend += num(r.spend); o.p_results += num(r.results); }
+          }
+          o.cpr = o.results ? o.spend / o.results : null;
+          o.p_cpr = o.p_results ? o.p_spend / o.p_results : null;
+          o.chg = o.cpr != null && o.p_cpr != null ? o.cpr / o.p_cpr - 1 : null;
+          o.state = targetState(o.cpr, o.target_cpr, o.spend, o.results);
+          out.push(o);
+        }
+      }
+      return out;
+    },
+  });
+
+  // ---------- header ----------
+  const lead = (name, f) => dash.draw(name, (e) => { const k = one('kpis'); e.textContent = k ? f(k) : '—'; });
+  lead('lead_range', () => { const r = one('range'); return r ? (r.s === r.e ? (r.e === r.max ? 'сьогодні' : dayLabel(r.e)) : dayLabel(r.s) + '–' + dayLabel(r.e)) : '—'; });
+  lead('lead_spend', (k) => usd(k.spend));
+  dash.draw('lead_n', (e) => { const g = one('portfolio_kpis'); e.textContent = g ? g.n_active + ' проєктах' : '—'; });
+  dash.draw('lead_off', (e) => { const g = one('portfolio_kpis'); e.textContent = g ? (g.n_attention ? g.n_attention + ' з ' + g.n_active : 'жоден проєкт') : '—'; });
+  lead('lead_fat', (k) => String(k.n_fatigue));
+  dash.draw('range_label', (e) => {
+    const r = one('range');
+    e.textContent = r ? 'Порівнюємо з ' + dayLabel(r.ps) + (r.ps === r.pe ? '' : '–' + dayLabel(r.pe)) + ' (' + r.len + ' дн.)' : '';
+  });
+
+  // ---------- KPI tiles ----------
+  function tile(label, value, delta, cls, foot, src, field, acc) {
+    const t = el('div', 'md-kpi'); t.style.setProperty('--acc', acc);
+    t.append(el('div', 'md-kpi-l', label));
+    const v = el('div', 'md-kpi-v', value);
+    if (src) { v.setAttribute('data-source', src); v.setAttribute('data-field', field); v.setAttribute('data-row', '0'); }
+    const f = el('div', 'md-kpi-f'); f.append(el('span', 'md-d ' + (cls || ''), delta), el('span', '', foot));
+    t.append(v, f);
+    return t;
+  }
+  const chg = (a, b) => (a != null && b ? a / b - 1 : null);
+  dash.draw('kpi_tiles', (e) => {
+    const k = one('kpis'), r = one('range'), g = one('portfolio_kpis');
+    if (!k || !r || !g) { e.replaceChildren(); return; }
+    const foot = r.len === 1 ? 'за день' : 'за ' + r.len + ' дн.';
+    const dSp = chg(g.spend, g.p_spend);
+    const over = g.budget_used != null && g.budget_used > g.time_share * 1.1;
+    e.replaceChildren(
+      tile('Загальні витрати', usd(g.spend), signed(dSp), '', foot + ' · ' + usd(g.per_day) + '/день', 'portfolio_kpis', 'spend', 'var(--c-spend)'),
+      tile('Проєктів в роботі', String(g.n_active), 'на паузі: ' + g.n_paused, '', 'усього клієнтів: ' + g.n_total, 'portfolio_kpis', 'n_active', 'var(--c-res)'),
+      tile('Бюджет місяця', g.budget_used == null ? '—' : Math.round(g.budget_used * 100) + '%', 'місяця минуло ' + Math.round(g.time_share * 100) + '%', over ? 'is-bad' : '', usd(g.mtd) + ' з ' + usd(g.budget), 'portfolio_kpis', 'budget_used', 'var(--c-cpr)'),
+      tile('LTV клієнтів', usd(g.ltv), 'MRR ' + usd(g.mrr), '', 'вручну, Meta цього не дає · у середньому ' + usd(g.avg_ltv), 'portfolio_kpis', 'ltv', 'var(--c-roas)'),
+      tile('Потребують уваги', String(g.n_attention), g.n_attention ? 'оплата: ' + g.n_pay + ' · поза ціллю: ' + g.n_off : 'усе гаразд', g.n_attention ? 'is-bad' : 'is-good', 'з ' + g.n_active + ' проєктів', 'portfolio_kpis', 'n_attention', 'var(--c-pink)'),
+      tile('Креативів вигорає', String(k.n_fatigue), 'без результату: ' + k.n_zero, k.n_fatigue ? 'is-bad' : '', 'з ' + k.n_active + ' активних', 'kpis', 'n_fatigue', 'var(--color-bad)'),
+    );
+  });
+
+  // ---------- alerts ----------
+  dash.draw('alert_list', (e) => {
+    const rows = ok('alerts');
+    if (!rows) { e.replaceChildren(); return; }
+    if (!rows.length) { const li = el('li', 'md-empty', 'Критичних моментів за цей період немає.'); li.style.padding = '12px 20px'; e.replaceChildren(li); return; }
+    e.replaceChildren(...rows.map((a) => {
+      const li = el('li', 'md-alert ' + (a.sev === 'bad' ? 'is-bad' : ''));
+      const box = el('div');
+      box.append(el('b', '', a.title), el('span', '', a.detail));
+      li.append(el('i'), box, el('span', 'md-num', usd(a.weight)));
+      return li;
+    }));
+  });
+
+  // ---------- chart ----------
+  dash.draw('chart_legend', (e) => {
+    const list = ok('projects') || [];
+    e.replaceChildren(...list.map((p) => { const s = el('span'); const i = el('i'); i.style.background = projColor(p.project); s.append(i, document.createTextNode(p.project)); return s; }));
+  });
+  dash.draw('chart_daily', (e) => {
+    const rows = ok('daily_proj'), projects = ok('projects');
+    if (!rows || !rows.length || !projects) { e.replaceChildren(); return; }
+    const names = projects.map((p) => p.project);
+    const W = Math.max(320, e.clientWidth), H = 260, ml = 46, mr = 12, mt = 12, mb = 28;
+    const box = el('div');
+    const tip = el('div', 'md-tip'); tip.hidden = true;
+    const svg = d3.select(box).append('svg').attr('viewBox', '0 0 ' + W + ' ' + H).attr('role', 'img')
+      .attr('aria-label', 'Витрати стовпцями по днях, кожен проєкт своїм кольором');
+    const x = d3.scaleBand().domain(rows.map((r) => r.date)).range([ml, W - mr]).padding(rows.length > 20 ? 0.2 : 0.32);
+    const y = d3.scaleLinear().domain([0, d3.max(rows, (r) => r.total) * 1.08 || 1]).nice().range([H - mb, mt]);
+    const kfmt = (v) => (v >= 1000 ? '$' + (v / 1000).toFixed(v % 1000 ? 1 : 0).replace('.', ',') + 'к' : '$' + v);
+    y.ticks(4).forEach((t) => {
+      svg.append('line').attr('x1', ml).attr('x2', W - mr).attr('y1', y(t)).attr('y2', y(t)).style('stroke', 'var(--cds-chart-grid, var(--color-border-line))').attr('stroke-width', 1);
+      svg.append('text').attr('x', ml - 8).attr('y', y(t) + 4).attr('text-anchor', 'end').text(kfmt(t));
+    });
+    const step = Math.ceil(rows.length / 7);
+    rows.forEach((r, i) => { if (i % step === 0 || i === rows.length - 1) svg.append('text').attr('x', x(r.date) + x.bandwidth() / 2).attr('y', H - 8).attr('text-anchor', 'middle').text(dayLabel(r.date)); });
+    const stacked = rows.flatMap((r) => { let acc = 0; return names.map((n) => { const v = r.by[n] || 0; const seg = { date: r.date, name: n, y0: acc, y1: acc + v }; acc += v; return seg; }); });
+    svg.selectAll('rect.b').data(stacked.filter((d) => d.y1 > d.y0)).join('rect').attr('class', 'b').attr('x', (d) => x(d.date)).attr('width', x.bandwidth())
+      .attr('y', (d) => y(d.y1)).attr('height', (d) => Math.max(1, y(d.y0) - y(d.y1))).style('fill', (d) => projColor(d.name)).style('opacity', 0.9);
+    svg.selectAll('rect.h').data(rows).join('rect').attr('class', 'h').attr('x', (r) => x(r.date) - x.step() * x.paddingInner() / 2).attr('width', x.step()).attr('y', mt).attr('height', H - mb - mt).attr('fill', 'transparent')
+      .on('mousemove', (ev, r) => {
+        tip.replaceChildren(el('b', '', dayLabel(r.date) + ' · ' + usd(r.total)), ...names.filter((n) => r.by[n]).map((n) => { const d = el('div'); d.append(dot(n), document.createTextNode(n + ': ' + usd(r.by[n]))); return d; }));
+        tip.hidden = false;
+        const bx = box.getBoundingClientRect();
+        const left = Math.min(Math.max(ev.clientX - bx.left + 12, 0), Math.max(0, bx.width - tip.offsetWidth - 4));
+        tip.style.left = left + 'px'; tip.style.top = Math.max(0, ev.clientY - bx.top - 90) + 'px';
+      })
+      .on('mouseleave', () => { tip.hidden = true; });
+    box.style.position = 'relative';
+    box.append(tip);
+    e.replaceChildren(box);
+  });
+
+  // ---------- cells ----------
+  const pill = (map, key) => { const m = map[key] || ['—', '']; return el('span', 'md-pill ' + m[1], m[0]); };
+  const deltaCell = (td, v) => { td.className = 'md-d ' + (v == null ? '' : v <= -0.03 ? 'is-good' : v >= 0.03 ? 'is-bad' : ''); td.textContent = signed(v); };
+  const bar = (share) => { const b = el('span', 'md-bar'); const i = el('i'); i.style.width = Math.max(2, share * 100) + '%'; b.append(i); return b; };
+  const projCell = (name, sub) => { const td = el('td'); td.append(dot(name), document.createTextNode(name)); if (sub) td.append(el('small', '', sub)); return td; };
+
+  dash.draw('t_projects', (e) => {
+    const rows = ok('portfolio');
+    if (!rows) { e.replaceChildren(); return; }
+    e.replaceChildren(...rows.map((p) => {
+      const tr = el('tr'); tr.dataset.key = p.project;
+      const c2 = el('td'); c2.append(bar(p.share), document.createTextNode(Math.round(p.share * 100) + '%'));
+      const c3 = el('td', 'md-d', signed(p.d_spend));
+      const c4 = el('td'); c4.className = p.pace != null && p.pace > 1.1 ? 'md-d is-bad' : '';
+      c4.append(bar(Math.min(1, p.budget_used || 0)), document.createTextNode(p.budget_used == null ? '—' : Math.round(p.budget_used * 100) + '%'));
+      c4.append(el('small', '', usd(p.mtd) + ' з ' + usd(p.budget)));
+      const c7 = el('td');
+      if (p.reasons.length) c7.append(...p.reasons.slice(0, 2).map(([t, c]) => { const s = el('span', 'md-pill ' + c, t); s.style.marginLeft = '4px'; return s; }));
+      else c7.append(el('span', 'md-pill is-good', 'Усе гаразд'));
+      tr.append(projCell(p.project, 'клієнт ' + p.months + ' міс.'), el('td', '', usd(p.spend)), c2, c3, c4, el('td', '', usd(p.monthly_fee)), el('td', '', usd(p.ltv)), c7);
+      return tr;
+    }));
+  });
+
+  // ---------- drill-down tree ----------
+  const path = { project: null, campaign: null, adset: null };
+  const level = () => (path.adset ? 3 : path.campaign ? 2 : path.project ? 1 : 0);
+  const redrawTree = () => { dash.draw('crumbs'); dash.draw('tree_body'); };
+  dash.draw('crumbs', (e) => {
+    const parts = [['Усі проєкти', () => { path.project = path.campaign = path.adset = null; }]];
+    if (path.project) parts.push([path.project, () => { path.campaign = path.adset = null; }]);
+    if (path.campaign) parts.push([path.campaign, () => { path.adset = null; }]);
+    if (path.adset) parts.push([path.adset, () => {}]);
+    const kids = [];
+    parts.forEach(([t, fn], i) => {
+      if (i) kids.push(el('span', '', '›'));
+      const b = el('button', '', t); b.type = 'button';
+      if (i === parts.length - 1) b.setAttribute('aria-current', 'true');
+      b.addEventListener('click', () => { fn(); redrawTree(); });
+      kids.push(b);
+    });
+    e.replaceChildren(...kids);
+  });
+  dash.draw('tree_body', (e) => {
+    const lv = level();
+    let rows, onClick;
+    if (lv === 0) { rows = ok('by_project'); onClick = (r) => { path.project = r.name; }; }
+    else if (lv === 1) { rows = (ok('by_campaign') || []).filter((r) => r.project === path.project); onClick = (r) => { path.campaign = r.campaign; }; }
+    else if (lv === 2) { rows = (ok('by_adset') || []).filter((r) => r.project === path.project && r.campaign === path.campaign); onClick = (r) => { path.adset = r.adset; }; }
+    else { rows = (ok('ads') || []).filter((r) => r.project === path.project && r.campaign === path.campaign && r.adset === path.adset).sort((a, b) => b.spend - a.spend); onClick = null; }
+    if (!rows) { e.replaceChildren(); return; }
+    e.replaceChildren(...rows.map((r) => {
+      const tr = el('tr', onClick ? 'is-click' : '');
+      if (onClick) { tr.tabIndex = 0; tr.addEventListener('click', () => { onClick(r); redrawTree(); }); tr.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { onClick(r); redrawTree(); } }); }
+      const c0 = el('td'); c0.append(dot(r.project), document.createTextNode(lv === 3 ? r.ad : r.name));
+      if (lv < 3) c0.append(el('small', '', r.n_ads + ' оголошень'));
+      const c2 = el('td');
+      if (lv < 3) c2.append(bar(r.share), document.createTextNode(Math.round(r.share * 100) + '%')); else c2.textContent = '—';
+      const c7 = el('td'); deltaCell(c7, r.chg);
+      const c8 = el('td'); c8.append(lv === 3 ? pill(AD_ST, r.status) : pill(TG_ST, r.state));
+      tr.append(c0, el('td', '', usd(r.spend)), c2, el('td', '', nf0.format(r.results)), el('td', '', usd2(r.cpr)), el('td', '', pct1(r.ctr)), el('td', '', usd2(r.cpm)), c7, c8);
+      return tr;
+    }));
+  });
+
+  // ---------- creatives, grouped by project ----------
+  let crFilter = 'all', crProject = 'all';
+  const crQ = () => { const i = document.getElementById('cr-q'); return i ? i.value.trim().toLowerCase() : ''; };
+  dash.draw('cr_tiles', (e) => {
+    const k = one('kpis');
+    if (!k) { e.replaceChildren(); return; }
+    e.replaceChildren(
+      tile('Активні креативи', String(k.n_active), 'від 20 доларів витрат', '', '', 'kpis', 'n_active', 'var(--c-res)'),
+      tile('Вигорають', String(k.n_fatigue), 'останні 3 дні гірші за період', k.n_fatigue ? 'is-bad' : '', '', 'kpis', 'n_fatigue', 'var(--color-bad)'),
+      tile('Без результату', String(k.n_zero), 'від 30 доларів без результату', k.n_zero ? 'is-bad' : '', '', 'kpis', 'n_zero', 'var(--c-spend)'),
+      tile('Ростуть', String(k.n_up), 'ціна результату краща на 15%+', k.n_up ? 'is-good' : '', '', 'kpis', 'n_up', 'var(--c-ok)'),
+    );
+  });
+  const chips = (e, defs, current, onPick, dotted) => {
+    e.replaceChildren(...defs.map(([k, label]) => {
+      const b = el('button', ''); b.type = 'button';
+      if (dotted && k !== 'all') b.append(dot(k));
+      b.append(document.createTextNode(label));
+      b.setAttribute('aria-pressed', String(k === current));
+      b.addEventListener('click', () => onPick(k));
+      return b;
+    }));
+  };
+  dash.draw('cr_project', (e) => {
+    const rows = ok('by_project');
+    if (!rows) { e.replaceChildren(); return; }
+    if (crProject !== 'all' && !rows.some((p) => p.project === crProject)) crProject = 'all';
+    chips(e, [['all', 'Усі проєкти'], ...rows.map((p) => [p.project, p.project])], crProject, (k) => { crProject = k; dash.draw('cr_project'); dash.draw('cr_body'); }, true);
+  });
+  dash.draw('cr_filter', (e) => {
+    const rows = ok('ads');
+    if (!rows) { e.replaceChildren(); return; }
+    const scope = rows.filter((r) => crProject === 'all' || r.project === crProject);
+    const counts = { all: scope.length };
+    scope.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
+    if (crFilter !== 'all' && !counts[crFilter]) crFilter = 'all';
+    const defs = [['all', 'Усі'], ['fatigue', 'Вигорають'], ['zero', 'Без результату'], ['down', 'Погіршуються'], ['up', 'Ростуть'], ['new', 'Нові']].filter(([k]) => counts[k]).map(([k, l]) => [k, l + ' · ' + counts[k]]);
+    chips(e, defs, crFilter, (k) => { crFilter = k; dash.draw('cr_filter'); dash.draw('cr_body'); }, false);
+  });
+  dash.draw('cr_body', (e) => {
+    const rows = ok('ads'), projects = ok('by_project');
+    if (!rows || !projects) { e.replaceChildren(); return; }
+    const q = crQ();
+    const out = [];
+    for (const p of projects) {
+      if (crProject !== 'all' && p.project !== crProject) continue;
+      const list = rows.filter((r) => r.project === p.project && (crFilter === 'all' || r.status === crFilter) && (!q || (r.ad + ' ' + r.adset).toLowerCase().includes(q)))
+        .sort((a, b) => RANK[a.status] - RANK[b.status] || b.spend - a.spend);
+      if (!list.length) continue;
+      const gh = el('tr', 'md-grp'); const gc = el('td'); gc.colSpan = 8;
+      const gi = el('div', 'md-grp-in');
+      const nm = el('b'); nm.append(dot(p.project), document.createTextNode(p.project));
+      gi.append(nm, el('span', '', usd(p.spend) + ' витрат'), el('span', '', nf0.format(p.results) + ' результатів'),
+        el('span', '', usd2(p.cpr) + ' при цілі ' + usd2(p.target_cpr)), pill(TG_ST, p.state));
+      if (p.n_fatigue) gi.append(el('span', '', 'вигорає: ' + p.n_fatigue));
+      gc.append(gi); gh.append(gc); out.push(gh);
+      list.forEach((r) => {
+        const tr = el('tr'); tr.dataset.key = r.key;
+        const c0 = el('td', '', r.ad); c0.append(el('small', '', r.campaign + ' · ' + r.adset));
+        const c5 = el('td'); deltaCell(c5, r.chg);
+        const c7 = el('td'); c7.append(pill(AD_ST, r.status));
+        tr.append(c0, el('td', '', usd(r.spend)), el('td', '', nf0.format(r.results)), el('td', '', usd2(r.cpr)), el('td', '', usd2(r.l3_cpr)), c5, el('td', '', r.roas == null ? '—' : nf2.format(r.roas)), c7);
+        out.push(tr);
+      });
+    }
+    if (!out.length) { const tr = el('tr'); const td = el('td', 'md-empty', 'Нічого не знайдено'); td.colSpan = 8; tr.append(td); e.replaceChildren(tr); return; }
+    e.replaceChildren(...out);
+  });
+
+  // ---------- reports: project by project ----------
+  ['daily', 'weekly'].forEach((rep) => {
+    const items = (kind, project) => (ok('report_items') || []).filter((r) => r.report === rep && r.kind === kind && (project == null || r.project === project)).sort((a, b) => a.order - b.order);
+    dash.draw('rp_' + rep + '_verdict', (e) => {
+      const v = items('verdict')[0];
+      if (!v) { e.replaceChildren(); return; }
+      e.replaceChildren(el('span', 'md-pill ' + (v.text === 'Усе в нормі' ? 'is-good' : 'is-warn'), v.text));
+    });
+    dash.draw('rp_' + rep + '_headline', (e) => { const h = items('headline')[0]; e.textContent = h ? h.text : '—'; });
+    const COLS = [['scale', 'Масштабувати', 'is-good'], ['watch', 'Звернути увагу', 'is-warn'], ['pause', 'Вимкнути', 'is-bad']];
+    dash.draw('rp_' + rep + '_projects', (e) => {
+      const rows = (ok('rp_projects') || []).filter((r) => r.report === rep).sort((a, b) => b.spend - a.spend);
+      if (!rows.length || !ok('report_items')) { e.replaceChildren(); return; }
+      e.replaceChildren(...rows.map((p) => {
+        const card = el('div', 'md-proj');
+        const h = el('div', 'md-proj-h');
+        const nm = el('b'); nm.append(dot(p.project), document.createTextNode(p.project));
+        h.append(nm, pill(TG_ST, p.state));
+        const m = el('div', 'md-proj-m');
+        const stat = (label, val) => { const s = el('span', '', label + ' '); s.append(el('b', '', val)); return s; };
+        m.append(stat('Витрати', usd(p.spend)), stat(p.result_label, nf0.format(p.results)), stat('Ціна', usd2(p.cpr)), stat('Ціль', usd2(p.target_cpr)), stat('До попереднього', signed(p.chg)));
+        const cols = el('div', 'md-cols');
+        COLS.forEach(([kind, title, cls]) => {
+          const col = el('div', 'md-col ' + cls); col.append(el('h3', '', title));
+          const list = items(kind, p.project);
+          if (!list.length) col.append(el('div', 'md-empty', 'Нічого'));
+          list.forEach((r) => { const d = el('div', 'md-item'); d.append(el('b', '', r.ad), el('p', '', r.text)); col.append(d); });
+          cols.append(col);
+        });
+        card.append(h, m, cols);
+        return card;
+      }));
+    });
+  });
+
+  // ---------- controls and tabs (listeners and attributes only) ----------
+  const TABS = ['overview', 'campaigns', 'creatives', 'daily', 'weekly'];
+  function showTab(id, link) {
+    TABS.forEach((t) => { const s = document.getElementById(t); if (s) s.hidden = t !== id; });
+    document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
+    if (link) dash.setLink(id);
+  }
+  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab, true)));
+  document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.goto, true)));
+  const from = document.getElementById('rg-from'), to = document.getElementById('rg-to');
+  document.querySelectorAll('#period button').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.range;
+    if (v === 'custom') { const r = one('range'); dash.setParams({ range: 'custom', from: r ? r.s : '', to: r ? r.e : '' }); }
+    else dash.setParams({ range: v });
+  }));
+  const onDate = () => {
+    if (!from || !to || !from.value || !to.value || !from.validity.valid || !to.validity.valid || from.value > to.value) return;
+    dash.setParams({ range: 'custom', from: from.value, to: to.value });
+  };
+  if (from) { from.addEventListener('change', onDate); }
+  if (to) { to.addEventListener('change', onDate); }
+  const q = document.getElementById('cr-q');
+  if (q) q.addEventListener('input', () => dash.draw('cr_body'));
+  dash.onData(() => {
+    const r = one('range');
+    const preset = r ? r.preset : '14';
+    document.querySelectorAll('#period button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.range === preset)));
+    const cd = document.getElementById('custom-dates');
+    if (cd) cd.hidden = preset !== 'custom';
+    if (r && from && from !== document.activeElement) from.value = r.s;
+    if (r && to && to !== document.activeElement) to.value = r.e;
+  });
+  const named = location.hash.slice(1);
+  if (TABS.includes(named)) showTab(named, false);
+})();
+</script>

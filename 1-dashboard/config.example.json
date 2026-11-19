@@ -1,0 +1,17 @@
+{
+  "clients": [
+    {
+      "project": "Назва проєкту",
+      "account_id": "act_0000000000",
+      "type": "lead",
+      "result_label": "Ліди",
+      "target_cpr": 5.0,
+      "target_roas": 0,
+      "status": "active",
+      "monthly_fee": 0,
+      "client_since": "2025-01-01",
+      "until": null,
+      "monthly_budget": 0
+    }
+  ]
+}
