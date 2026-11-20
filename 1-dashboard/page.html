@@ -126,7 +126,7 @@
 <div class="md">
   <header class="md-head">
     <div>
-      <span class="md-eyebrow">Демо · усі проєкти й цифри вигадані</span>
+      <span class="md-eyebrow">Усі проєкти · дані з Meta Marketing API</span>
       <h1 id="top">Реклама Meta</h1>
       <p class="md-lead">За період <b data-draw="lead_range">—</b> витрачено <b data-draw="lead_spend">—</b> у <b data-draw="lead_n">—</b>. Потребують уваги: <b data-draw="lead_off">—</b>. Креативів, що вигорають: <b data-draw="lead_fat">—</b>.</p>
     </div>
@@ -614,6 +614,7 @@
   dash.draw('range_label', (e) => {
     const r = one('range');
     e.textContent = r ? 'Порівнюємо з ' + dayLabel(r.ps) + (r.ps === r.pe ? '' : '–' + dayLabel(r.pe)) + ' (' + r.len + ' дн.)' : '';
+    // межі власного періоду обрізає розрахунок 'range' (перший і останній день у даних), тож min/max у полях не потрібні
   });
 
   // ---------- KPI tiles ----------
@@ -895,8 +896,6 @@
     document.querySelectorAll('#period button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.range === preset)));
     const cd = document.getElementById('custom-dates');
     if (cd) cd.hidden = preset !== 'custom';
-    if (r && from) { from.min = r.min; from.max = r.max; }
-    if (r && to) { to.min = r.min; to.max = r.max; }
     if (r && from && from !== document.activeElement) from.value = r.s;
     if (r && to && to !== document.activeElement) to.value = r.e;
   });

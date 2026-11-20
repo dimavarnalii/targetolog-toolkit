@@ -5,6 +5,7 @@
       "account_id": "act_0000000000",
       "type": "lead",
       "result_label": "Ліди",
+      "objectives": [],
       "target_cpr": 5.0,
       "target_roas": 0,
       "status": "active",

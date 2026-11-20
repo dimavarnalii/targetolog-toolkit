@@ -25,7 +25,7 @@
 ## BUILD 1: збір даних
 - config.example.json скопіюй у config.json і заповни з відповідей. Перевір логіку: python 1-dashboard/fetch_facts.py --self-test.
 - config.json і out/ тримай поза папкою набору. Перший запуск на одному кабінеті: python -I <TOOLKIT>/1-dashboard/fetch_facts.py --config config.json --only "Назва" --days 30 --out out. Порівняй spend за вчора з Ads Manager. Дашборд у USD: для іншої валюти скрипт попередить.
-- Якщо результат не той, що вважає користувач, задай result_action у config.json (наприклад onsite_conversion.lead_grouped; для message дефолт не перевірений). Лише потім додавай решту кабінетів.
+- Результат береться з поля results (як в Ads Manager). Якщо в проєкті кілька цілей, задай objectives (напр. ["LEADS"]), інакше результати різних цілей складуться разом; не той тип: result_action. Лише потім додавай решту кабінетів.
 - META_TOKEN має бачити й заплановане завдання: постійна змінна середовища (Windows: setx), перезапуск застосунку. Значення в чат не просити.
 
 ## BUILD 2: артефакт

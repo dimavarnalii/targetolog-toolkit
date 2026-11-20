@@ -16,7 +16,7 @@
 import argparse, datetime as dt, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 
 API_VERSION = "v23.0"
-FIELDS = "date_start,campaign_name,adset_name,ad_name,spend,impressions,inline_link_clicks,actions,action_values"
+FIELDS = "objective,date_start,campaign_name,adset_name,ad_name,spend,impressions,inline_link_clicks,results,actions,action_values"
 # Яка дія Meta вважається «результатом» для типу проєкту (можна змінити в config.json -> result_action)
 DEFAULT_ACTION = {"lead": "lead", "purchase": "purchase", "message": "onsite_conversion.messaging_conversation_started_7d"}
 PURCHASE_ALIASES = ("purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase")
@@ -39,6 +39,16 @@ def pick(items, name):
     return 0.0
 
 
+# Мета кампанії Meta -> сімейство. У config.json -> "objectives": ["LEADS"] залишає в проєкті лише кампанії цих цілей:
+# результати різних цілей (ліди, перегляди профілю, покупки) не можна складати в одну ціну результату.
+FAMILY = {"OUTCOME_SALES": "SALES", "CONVERSIONS": "SALES", "PRODUCT_CATALOG_SALES": "SALES",
+          "OUTCOME_LEADS": "LEADS", "LEAD_GENERATION": "LEADS",
+          "OUTCOME_ENGAGEMENT": "ENGAGEMENT", "POST_ENGAGEMENT": "ENGAGEMENT", "MESSAGES": "ENGAGEMENT", "VIDEO_VIEWS": "ENGAGEMENT",
+          "OUTCOME_TRAFFIC": "TRAFFIC", "LINK_CLICKS": "TRAFFIC",
+          "OUTCOME_AWARENESS": "AWARENESS", "REACH": "AWARENESS", "BRAND_AWARENESS": "AWARENESS",
+          "OUTCOME_APP_PROMOTION": "APP", "APP_INSTALLS": "APP"}
+
+
 def http_get(url, fetcher=None, token=None):
     if fetcher:
         return fetcher(url)
@@ -51,7 +61,16 @@ def http_get(url, fetcher=None, token=None):
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "replace")[:300]
+            raw = e.read().decode("utf-8", "replace")
+            body = raw[:300]
+            try:
+                err_code = json.loads(raw).get("error", {}).get("code")
+            except ValueError:
+                err_code = None
+            if err_code in (4, 17, 32, 613) and attempt < 3:   # ліміт запитів Meta: чекаємо й повторюємо
+                print(f"Ліміт запитів Meta, чекаю {60 * (attempt + 1)} с…", file=sys.stderr)
+                time.sleep(60 * (attempt + 1))
+                continue
             if e.code in (429, 500, 502, 503) and attempt < 3:
                 time.sleep(5 * (attempt + 1))
                 continue
@@ -85,8 +104,23 @@ def fetch_account_info(account_id, token, fetcher=None):
     return http_get(url, fetcher, token)
 
 
-def to_fact(row, project, rtype, action):
-    results = pick(row.get("actions"), action)
+def api_results(row):
+    """Поле results Insights API: той самий «Results», що в Ads Manager (залежить від оптимізації кампанії). None, якщо поля немає."""
+    res = row.get("results")
+    if not res:
+        return None
+    total = 0.0
+    for item in res:
+        vals = item.get("values") or []
+        if vals:
+            total += _num(vals[0].get("value"))
+    return total
+
+
+def to_fact(row, project, rtype, action, source="api"):
+    results = api_results(row) if source == "api" else None
+    if results is None:   # поля немає (наприклад, миттєві лід-форми) або обрано source=actions: дія за типом проєкту
+        results = pick(row.get("actions"), action)
     revenue = pick(row.get("action_values"), "purchase") if rtype == "purchase" else 0.0
     return {
         "date": row["date_start"], "project": project,
@@ -110,7 +144,10 @@ def build(config, days, token, fetcher=None, today=None):
             print(f"УВАГА: кабінет {name} у валюті {cur}. Дашборд показує знак $ і пороги в доларах: "
                   "переведіть пороги в page.html або використовуйте кабінет у USD.", file=sys.stderr)
         rows = fetch_account(c["account_id"], since, until, token, fetcher)
-        facts.extend(to_fact(r, name, rtype, action) for r in rows)
+        want = {x.upper() for x in c.get("objectives", [])}
+        if want:
+            rows = [r for r in rows if FAMILY.get((r.get("objective") or "").upper(), "OTHER") in want or (r.get("objective") or "").upper() in want]
+        facts.extend(to_fact(r, name, rtype, action, c.get("results_source", "api")) for r in rows)
         projects.append({"project": name, "type": rtype, "result_label": c.get("result_label", "Результати"),
                          "target_cpr": c.get("target_cpr", 0), "target_roas": c.get("target_roas", 0)})
         clients.append({"project": name, "status": c.get("status", "active"), "monthly_fee": c.get("monthly_fee", 0),
@@ -151,6 +188,15 @@ def self_test():
     assert len(calls) == 2 and "access_token" not in calls[0], "пагінація або токен в адресі"
     assert _[0]["account_status"] == 9, "статус кабінету"
     assert facts[0]["results"] == 3 and facts[0]["spend"] == 10.5 and facts[0]["clicks"] == 20, facts[0]
+    r_api = {"date_start": "2026-01-02", "spend": "10", "impressions": "100", "inline_link_clicks": "5",
+             "results": [{"indicator": "profile_visit_view", "values": [{"value": "77"}]}],
+             "actions": [{"action_type": "lead", "value": "3"}]}
+    assert to_fact(r_api, "T", "lead", "lead")["results"] == 77, "results з API"
+    assert to_fact(r_api, "T", "lead", "lead", "actions")["results"] == 3, "results з actions"
+    only = {"clients": [{"project": "Л", "account_id": "act_3", "type": "lead", "objectives": ["LEADS"]}]}
+    mix = {"data": [dict(r_api, objective="OUTCOME_LEADS"), dict(r_api, objective="OUTCOME_TRAFFIC")]}
+    f3, _, _ = build(only, 7, "TOKEN", lambda u: mix if "/insights" in u else {"account_status": 1, "currency": "USD"}, today=dt.date(2026, 1, 3))
+    assert len(f3) == 1, "фільтр за ціллю"
     cfg2 = {"clients": [{"project": "Магазин", "account_id": "act_2", "type": "purchase"}]}
     calls.clear()
     f2, _, _ = build(cfg2, 7, "TOKEN", lambda u: pages[1], today=dt.date(2026, 1, 3))
