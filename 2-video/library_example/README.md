@@ -10,6 +10,7 @@
 Звідки брати: власні зйомки або сток-сервіс, чия ліцензія дозволяє комерційне використання в рекламі
 (перевірте ліцензію кожного сервісу самі).
 
+0. Новий спосіб (рекомендовано): `python ad_creatives/library_catalog.py scan` → `library/catalog.json` з описами кадрів; описи пише агент за контактними листами, за ними `ad_creatives/plan_broll.py` підбирає перебивки. Стоки з вільною ліцензією: `scripts/fetch_stock.py` (Pexels/Pixabay, ваш безкоштовний API-ключ). Далі кроки 1-3 нижче необов'язкові.
 1. У `scripts/build_library_manifest.py` впишіть теги у словник `TAGS` (формат у файлі).
 2. `python scripts/build_library_manifest.py` → `library/manifest.json` (id, path, category, tags, width, height, fps, duration).
    Приклад структури: `manifest.example.json`.

@@ -13,6 +13,7 @@ scripts/                    спільні скрипти
   repeats.py                  перевірка дублів тексту (звук і стики субтитрів)
   cut_phrase.py               вирізати фразу з готового ролика (межі по зміні кадру)
   burn_subs.py                субтитри на готове відео
+  fetch_stock.py              пошук/завантаження перебивок зі стоків Pexels/Pixabay (офіційні API, ваш ключ)
   verify_video.py             перевірка файлу на «чорний екран» (moov, fps, SAR, піксельний формат, декод)
   scan_sheet.py               кадри з координатною сіткою (для кропів у шортсах)
   yt_fetch.py / shorts.py / render_project.py / build_dynamic_ass.py / build_overlay_filter.py /
@@ -20,6 +21,7 @@ scripts/                    спільні скрипти
   avatar_audio.py / words_to_captions.py   допоміжні для режиму аватара (Remotion)
 ad_creatives/               основний режим: креативи із сирих дублів
   make_proxies.py  transcribe_medium.py  gapcheck.py  tl_inspect.py  findw.py  broll_sheet.py  build_creative.py
+  library_catalog.py  plan_broll.py   каталог бібліотеки перебивок з описами; бриф і перевірка плану перебивок
   creatives.example.json
 references/                 ad_creatives.md, editing_rules.md, pitfalls.md, shorts.md, avatar_remotion.md
 library_example/            як скласти свою бібліотеку перебивок (README + manifest.example.json)

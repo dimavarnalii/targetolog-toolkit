@@ -50,6 +50,28 @@ def run(cmd, log=None):
         sys.exit(f"ffmpeg failed ({r.returncode}) {log or ''}")
 
 
+MEDIA_EXT = [".mp4", ".mov", ".m4v", ".jpg", ".jpeg", ".png", ".webp"]
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def resolve_media(f):
+    """"lib/<категорія>/<файл без розширення>", "px/<проксі>" або абсолютний шлях -> реальний файл (відео чи фото)."""
+    if f.startswith("lib/"):
+        base = vm.LIBRARY / f[4:]
+    elif f.startswith("px/"):
+        base = PROJ / "proxy" / f[3:]
+    else:
+        base = Path(f)
+    for cand in [base] + [Path(str(base) + e) for e in MEDIA_EXT]:
+        if cand.is_file():
+            return cand
+    return None
+
+
+def is_image(p):
+    return Path(p).suffix.lower() in IMAGE_EXT
+
+
 def probe_dur(p):
     out = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p)],
                          capture_output=True, text=True, check=True).stdout
@@ -263,7 +285,10 @@ def build_comp(cfg, segs, total, out_path, cut_out, ws_out, speed=1.0):
     sfx = []
     for k, c in enumerate(cut_out):
         dur = round(c["end"] - c["start"], 3)
-        inputs += ["-ss", str(c.get("ss", 0)), "-t", str(dur + 0.5), "-i", c["file"]]
+        if is_image(c["file"]):   # фото: показуємо як відео з рухом (Ken Burns нижче)
+            inputs += ["-loop", "1", "-framerate", str(FPS), "-t", str(dur + 0.5), "-i", c["file"]]
+        else:
+            inputs += ["-ss", str(c.get("ss", 0)), "-t", str(dur + 0.5), "-i", c["file"]]
         kb = (f"zoompan=z='min(1+0.10*on/({FPS}*{dur})\\,1.10)':d=1:x='iw/2-(iw/zoom/2)':"
               f"y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS}")
         fl.append(f"[{idx}:v]fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
@@ -354,12 +379,11 @@ def main():
         cut_out = []
         for c in cfg.get("cutaways", []):
             a = src_to_out(c["at"], segs) / speed
-            f = c["file"]
-            if f.startswith("lib/"):   # lib/<category>/<clip without .mp4> -> <VM_ROOT>/library/...
-                f = str(vm.LIBRARY / (f[4:] + ".mp4"))
-            elif f.startswith("px/"):
-                f = str(PROJ / "proxy" / (f[3:] + ".mp4"))
-            if c.get("ss", 0) + c.get("dur", 1.6) > probe_dur(f):
+            fp = resolve_media(c["file"])
+            if not fp:
+                sys.exit(f"cutaway {c['file']}: файл не знайдено (lib/<категорія>/<файл>, px/<проксі> або шлях)")
+            f = str(fp)
+            if not is_image(f) and c.get("ss", 0) + c.get("dur", 1.6) > probe_dur(f):
                 sys.exit(f"cutaway {f} too short for ss={c.get('ss', 0)} dur={c.get('dur', 1.6)}")
             cut_out.append({"start": round(a, 3), "end": round(min(a + c.get("dur", 1.6), total), 3),
                             "file": f, "ss": c.get("ss", 0)})

@@ -15,6 +15,7 @@
 |---|---|---|---|
 | `1-dashboard/fetch_facts.py` | graph.facebook.com (Meta Marketing API) | зчитати щоденну статистику кабінетів | ваш токен із змінної `META_TOKEN`; лише запити читання (GET); пише файли в папку `out/` |
 | `4-audit/fetch_meta.py` | graph.facebook.com (Meta Marketing API) | зчитати статистику кабінету | ваш токен із змінної `META_TOKEN`; лише запити читання (GET) |
+| `2-video/scripts/fetch_stock.py` | api.pexels.com, pixabay.com та їхні CDN (*.pexels.com, *.pixabay.com) | знайти й (лише з `--yes`) завантажити перебивки з вільних стоків | запит пошуку й ваш API-ключ зі змінної `PEXELS_API_KEY`/`PIXABAY_API_KEY`; інші адреси скрипт відхиляє |
 | `4-audit/site_check.py` | сайт клієнта; googleapis.com (PageSpeed Insights) | перевірити сторінку | адреса сайту; необов'язковий ключ `PSI_API_KEY` |
 | `2-video/scripts/yt_fetch.py` | через стороннього `yt-dlp` | завантажити відео за посиланням, яке ви дали | лише це посилання; режим необов'язковий |
 | `5-landing/lead_endpoint.gs` | api.telegram.org | надіслати вам заявку в Telegram | працює в ВАШОМУ Google-акаунті, токен бота у ваших Script Properties |
