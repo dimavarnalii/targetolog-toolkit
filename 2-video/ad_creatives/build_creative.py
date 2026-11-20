@@ -84,6 +84,20 @@ def build_segments(words, exclude, src_dur):
     return ws, out
 
 
+TARGET_WPS = 3.0   # цільовий темп чистої мови, слів/с (за практикою монтажера: ~3 с/слів, не швидше +25%)
+MAX_SPEED = 1.25
+
+
+def pick_speed(cfg, n_words, total_raw):
+    """"speed" у creatives.json: число (1.1), 1 (без прискорення) або "auto" (за замовчуванням).
+    auto: повільну мову підтягуємо до ~3 слів/с, але не швидше x1.25; швидку мову не чіпаємо."""
+    v = cfg.get("speed", "auto")
+    if v == "auto":
+        wps = n_words / total_raw if total_raw > 0 else TARGET_WPS
+        return round(min(MAX_SPEED, max(1.0, TARGET_WPS / wps)), 2) if wps > 0 else 1.0
+    return float(v)
+
+
 def src_to_out(t, segs):
     acc = 0.0
     for s, e in segs:
@@ -226,7 +240,7 @@ def zoom_intervals(ws_out, segs, total):
     return [(bounds[i], bounds[i + 1]) for i in range(len(bounds) - 1) if i % 2 == 1]
 
 
-def build_comp(cfg, segs, total, out_path, cut_out, ws_out):
+def build_comp(cfg, segs, total, out_path, cut_out, ws_out, speed=1.0):
     src = str(PROJ / cfg["source"])
     fl = []
     for i, (s, e) in enumerate(segs):
@@ -234,8 +248,12 @@ def build_comp(cfg, segs, total, out_path, cut_out, ws_out):
         fl.append(f"[0:a]atrim={s}:{e},asetpts=PTS-STARTPTS,afade=t=in:d=0.012,"
                   f"afade=t=out:st={max(0, e - s - 0.015):.3f}:d=0.015[a{i}];")
     n = len(segs)
-    fl.append("".join(f"[v{i}][a{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=1[vcat][ab];")
-    zi = zoom_intervals(ws_out, segs, total)
+    if speed != 1.0:   # прискорення мови: відео setpts, звук atempo (висота голосу не змінюється)
+        fl.append("".join(f"[v{i}][a{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=1[vcat0][ab0];")
+        fl.append(f"[vcat0]setpts=PTS/{speed}[vcat];[ab0]atempo={speed}[ab];")
+    else:
+        fl.append("".join(f"[v{i}][a{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=1[vcat][ab];")
+    zi = zoom_intervals(ws_out, [[s / speed, e / speed] for s, e in segs], total)
     zsum = "+".join(f"between(on/{FPS}\\,{a:.3f}\\,{b - 0.001:.3f})" for a, b in zi) or "0"
     fl.append(f"[vcat]zoompan=z='1+{ZOOM - 1:.3f}*({zsum})':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
               f"s={W}x{H}:fps={FPS},setsar=1[vb];")
@@ -329,11 +347,13 @@ def main():
         exclude = cfg.get("exclude", [])
         ws, segs = build_segments(words, exclude, src_dur)
         ws = fix_words(ws, cfg.get("fixes", {}), cfg.get("fix_at", []))
-        total = round(sum(e - s for s, e in segs), 3)
-        ws_out = [dict(w, start=src_to_out(w["start"], segs), end=src_to_out(w["end"], segs)) for w in ws]
+        total_raw = round(sum(e - s for s, e in segs), 3)
+        speed = pick_speed(cfg, len(ws), total_raw)
+        total = round(total_raw / speed, 3)
+        ws_out = [dict(w, start=src_to_out(w["start"], segs) / speed, end=src_to_out(w["end"], segs) / speed) for w in ws]
         cut_out = []
         for c in cfg.get("cutaways", []):
-            a = src_to_out(c["at"], segs)
+            a = src_to_out(c["at"], segs) / speed
             f = c["file"]
             if f.startswith("lib/"):   # lib/<category>/<clip without .mp4> -> <VM_ROOT>/library/...
                 f = str(vm.LIBRARY / (f[4:] + ".mp4"))
@@ -343,12 +363,12 @@ def main():
                 sys.exit(f"cutaway {f} too short for ss={c.get('ss', 0)} dur={c.get('dur', 1.6)}")
             cut_out.append({"start": round(a, 3), "end": round(min(a + c.get("dur", 1.6), total), 3),
                             "file": f, "ss": c.get("ss", 0)})
-        print(f"  src {src_dur:.1f}s -> {total:.1f}s, {len(segs)} segments, {len(cut_out)} cutaways")
+        print(f"  src {src_dur:.1f}s -> {total:.1f}s (speed x{speed}), {len(segs)} segments, {len(cut_out)} cutaways")
         (PROJ / "work" / (cfg["name"] + "_segments.json")).write_text(
             json.dumps({"segs": segs, "cutaways": cut_out, "words": ws_out}, ensure_ascii=False, indent=1), encoding="utf-8")
         comp = PROJ / "work" / (cfg["name"] + "_comp.mp4")
         if "--subs-only" not in sys.argv[2:] or not comp.exists():
-            build_comp(cfg, segs, total, comp, cut_out, ws_out)
+            build_comp(cfg, segs, total, comp, cut_out, ws_out, speed)
         for fmt, label in (("916", "9x16"), ("45", "4x5")):
             ass = PROJ / "work" / f"{cfg['name']}_{fmt}.ass"
             ass.write_text(build_ass(ws_out, cfg, fmt, total), encoding="utf-8")

@@ -10,6 +10,9 @@ SKILL.md                    скіл для Claude Code (вставте у .clau
 scripts/                    спільні скрипти
   vm_config.py                налаштування (змінні середовища) + перевірка ffmpeg/faster-whisper
   transcribe_words.py         транскрипт зі словами й таймкодами
+  repeats.py                  перевірка дублів тексту (звук і стики субтитрів)
+  cut_phrase.py               вирізати фразу з готового ролика (межі по зміні кадру)
+  burn_subs.py                субтитри на готове відео
   verify_video.py             перевірка файлу на «чорний екран» (moov, fps, SAR, піксельний формат, декод)
   scan_sheet.py               кадри з координатною сіткою (для кропів у шортсах)
   yt_fetch.py / shorts.py / render_project.py / build_dynamic_ass.py / build_overlay_filter.py /
@@ -18,7 +21,7 @@ scripts/                    спільні скрипти
 ad_creatives/               основний режим: креативи із сирих дублів
   make_proxies.py  transcribe_medium.py  gapcheck.py  tl_inspect.py  findw.py  broll_sheet.py  build_creative.py
   creatives.example.json
-references/                 ad_creatives.md, pitfalls.md, shorts.md, avatar_remotion.md
+references/                 ad_creatives.md, editing_rules.md, pitfalls.md, shorts.md, avatar_remotion.md
 library_example/            як скласти свою бібліотеку перебивок (README + manifest.example.json)
 remotion_avatar/            необов'язково: Remotion-шаблон для ролика з AI-аватаром (потрібен Node.js)
 ```

@@ -25,7 +25,7 @@ description: Монтаж рекламних відеокреативів 9:16 �
    Нічого не встановлюй без згоди: поясни користувачу, що ставити (ffmpeg із офіційного сайту; `pip install faster-whisper numpy`),
    і дочекайся, поки він встановить або скаже «став». Далі не йди, поки перевірка не пройде.
 4. Створи `VM_ROOT/projects/<назва>/` для проєкту. **Усі скрипти `ad_creatives/*` запускай, перебуваючи в цій папці проєкту.**
-5. Прочитай `PKG/references/ad_creatives.md` (креативи) перед роботою; при проблемах — `PKG/references/pitfalls.md`.
+5. Прочитай `PKG/references/ad_creatives.md` (креативи) і `PKG/references/editing_rules.md` (правила, що відрізняють якісний монтаж: темп, перебивки, субтитри, звук, контроль) перед роботою; при проблемах — `PKG/references/pitfalls.md`.
 
 ## Режими
 
@@ -35,20 +35,21 @@ description: Монтаж рекламних відеокреативів 9:16 �
 
 ## Процес: креативи (з папки проєкту)
 
-1. **Проксі**: `python PKG/ad_creatives/make_proxies.py <папка_з_сирими> [--ext MOV,MP4]` → `proxy/*.mp4` (1080×1920, 30 fps CFR, SAR 1, GOP 15, faststart).
+1. **Проксі**: `python PKG/ad_creatives/make_proxies.py <папка_з_сирими> [--ext MOV,MP4]` → `proxy/*.mp4` (1080×1920, 30 fps CFR, SAR 1, GOP 15, faststart; дублі кадрів зі смартфона прибираються, вимкнути `--no-dedup`).
 2. **Транскрипт**: `python PKG/ad_creatives/transcribe_medium.py --lang <мова> IMG_0001 IMG_0002 ...` → `IMG_0001.words_m.json` (у фоні; займає багато часу на слабкому ноуті; не запускай паралельно з рендером).
    Мову запитай у користувача (`uk`, `ru`, `en`…): автовизначення на суржику помиляється.
 3. **Огляд дубля**: `python PKG/ad_creatives/tl_inspect.py IMG_0001` — транскрипт по фразах і `preview/t_IMG_0001.png`; покажи користувачу, які діапазони виключити (`exclude`),
    які слова виправити (`fixes`/`fix_at`). Для слів, де розпізнавання «проковтнуло» фразу: `python PKG/scripts/transcribe_words.py IMG_0001.wav IMG_0001.words.json --model small --lang <мова>`,
    потім `python PKG/ad_creatives/gapcheck.py IMG_0001`, фрази додай в `inject`. Знайти слово: `python PKG/ad_creatives/findw.py IMG_0001 слово`.
 4. **Перебивки** (за наявності бібліотеки в `VM_ROOT/library`): `python PKG/ad_creatives/broll_sheet.py` → `preview/broll_sheet.png`, обери кліпи за змістом слів (не на абстрактні стоки заради кількості). Якщо бібліотеки немає — монтуй без перебивок і скажи про це.
-5. **creatives.json** за схемою з `references/ad_creatives.md` та `ad_creatives/creatives.example.json`: `source`, `words`, `exclude`, `fixes`, `fix_at`, `inject`, `keywords`, `hook` (`\n` — рядок, `*акцент*`), `music_vol`, `cutaways` (`at` у часі ДЖЕРЕЛА).
+5. **creatives.json** за схемою з `references/ad_creatives.md` та `ad_creatives/creatives.example.json`: `source`, `words`, `exclude`, `fixes`, `fix_at`, `inject`, `keywords`, `hook` (`\n` — рядок, `*акцент*`), `music_vol`, `speed` (`"auto"` за замовчуванням: повільну мову до ~3 слів/с, не швидше ×1,25; або число; `1` для аватара/TTS), `cutaways` (`at` у часі ДЖЕРЕЛА).
    Хук — лише те, що реально звучить у відео або підтверджено користувачем; не вигадуй цифр.
 6. **Семпл спершу**: збери один креатив і подивись кадри (хук, середина, кінець); повний набір — лише після «ок» користувача.
    Команда: `python PKG/ad_creatives/build_creative.py creatives.json <name>` (або `all`). Правки лише тексту: додай `--subs-only` (швидко).
 7. **Перевірка кожного файлу (обов'язково, `build_creative.py` сам не перевіряє)**:
    `python PKG/scripts/verify_video.py <файл_9x16> --fps 30` і `... <файл_4x5> --fps 30 --size 1080x1350`. Будь-який FAIL → файл не віддавай, дивись `pitfalls.md`.
    Дістань кадри з початку/середини/кінця (`ffmpeg -ss T -i файл -frames:v 1 ...`) і подивись: хук читається, субтитри не на обличчі.
+   Контактний лист: `ffmpeg -i файл.mp4 -vf "fps=1/2,scale=180:-1,tile=8x3" sheet.jpg` (шукай «спалахи» спікера, текст на обличчі, обрізані слова). Дублі тексту: `python PKG/scripts/repeats.py <файл>` (код 1 = є повтор; потребує faster-whisper).
 8. **Віддача**: файли в `VM_ROOT/done/<дата>/<VM_BRAND>/<name>_9x16.mp4` та `_4x5.mp4`. Покажи таблицю: № / джерело / тривалість / хук.
 
 ## Правила, що коштували переробок
