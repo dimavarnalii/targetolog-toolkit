@@ -24,6 +24,13 @@ def build(cfg):
     plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 9, 'axes.edgecolor': '#d1d5db', 'axes.labelcolor': '#374151', 'xtick.color': '#6b7280', 'ytick.color': '#374151'})
     gc = lambda v: '#10b981' if v >= 1.8 else '#f59e0b' if v >= 1.0 else '#ef4444'
     roas = K['roas']
+    mode = K.get('mode', 'roas'); RL = K.get('result_label', 'Покупки'); isr = mode == 'roas'
+    if not isr:  # у не-продажних цілях колір відносно середнього по акаунту, а не абсолютний ROAS
+        gc = lambda v: '#10b981' if v >= roas * 1.15 else '#f59e0b' if v >= roas * .85 else '#ef4444'
+    fe = lambda v: f'{v:.2f}' if isr else (f'{sym}{1 / v:,.2f}' if v else '—')   # значення ефективності для тексту
+    EC = 'ROAS' if isr else 'Ціна результату'   # для тексту
+    EH = 'ROAS' if isr else f'Рез. на {sym.strip()}1'   # заголовок стовпця: число, чим більше тим краще
+    EBAR = 'ROAS' if isr else f'Результатів на 1 {cur}'
 
     def hbar(labs, vals, fname, xlabel, colors=None, fmt='{:.2f}', ref=None):
         labs, vals = labs[::-1], vals[::-1]
@@ -145,10 +152,19 @@ def build(cfg):
             p = c.add_paragraph(); p.paragraph_format.space_after = Pt(1); run(p, val, bold=True, size=19, color=NAVY)
             p = c.add_paragraph(); p.paragraph_format.space_after = Pt(0); run(p, sub, size=8, color=MUT)
         spacer(6)
-    kpi_row([('Витрати', f'{sym}{K["spend"]:,.0f}', M['period'], 'F59E0B'), ('Покупки', f'{K["purchases"]:,.0f}', f'ціна покупки {sym}{K["cpa"]:.2f}' if K['cpa'] else '', '0EA5E9'),
-             ('Цінність покупок', f'{sym}{K["value"]:,.0f}', 'за даними пікселя', '10B981'), ('ROAS', f'{roas:.2f}', 'цінність покупок / витрати', '8B5CF6')])
+    if isr:
+        kpi_row([('Витрати', f'{sym}{K["spend"]:,.0f}', M['period'], 'F59E0B'), ('Покупки', f'{K["purchases"]:,.0f}', f'ціна покупки {sym}{K["cpa"]:.2f}' if K['cpa'] else '', '0EA5E9'),
+                 ('Цінність покупок', f'{sym}{K["value"]:,.0f}', 'за даними пікселя', '10B981'), ('ROAS', f'{roas:.2f}', 'цінність покупок / витрати', '8B5CF6')])
+    else:
+        kpi_row([('Витрати', f'{sym}{K["spend"]:,.0f}', M['period'], 'F59E0B'), (RL, f'{K["purchases"]:,.0f}', 'за метою кампаній', '0EA5E9'),
+                 ('Ціна результату', f'{sym}{K["cpa"]:.2f}' if K['cpa'] else '—', 'витрати / результати', '8B5CF6'), ('Мета аналізу', RL, 'головна за витратами', '10B981')])
     kpi_row([('CPM', f'{sym}{K["cpm"]:.2f}', 'ціна 1000 показів', '0EA5E9'), ('CTR за посиланням', f'{K["ctr"]:.2f}%', 'кліки / покази', '10B981'),
              ('Частота головної', f'{K["top_freq"]:.1f}', 'накопичена за період', 'EF4444'), ('Порожніх кампаній', f'{K["zero"]} з {K["n_all"]}', 'без витрат за період', 'F59E0B')])
+
+    if K.get('other_objectives'):
+        h1('Інші цілі в акаунті')
+        para('Результати різних цілей не порівнюють між собою, тому аналіз вище ведеться по головній цілі. Решта для довідки:', size=10)
+        table(['Мета', 'Витрати', 'Результати', 'Ціна результату'], [[o['label'], f'{sym}{o["spend"]:,.0f}', f'{o["results"]:,.0f}', f'{sym}{o["spend"] / o["results"]:,.2f}' if o['results'] else '—'] for o in K['other_objectives']], [5.5, 3.6, 3.6, 4.5], ['l', 'l', 'l', 'l'])
 
     # 1 findings
     h1('Ключові знахідки')
@@ -160,39 +176,39 @@ def build(cfg):
     table(['Показник', 'Значення', 'Що це означає'], [
         ['Кампаній усього', str(K['n_all']), 'за весь час існування акаунта'], ['З витратами за період', str(K['n_act']), f'{K["n_act"] / K["n_all"] * 100:.0f}% акаунта'],
         ['Без витрат', str(K['zero']), 'кандидати на архівацію'], ['Активні зараз', str(K['active_now']), 'працюють у період аналізу']] +
-        ([[a['name'], f'{sym}{a["spend"]:,.0f}', f'ROAS {a["roas"]:.2f}'] for a in rep['audience_types']] if rep['audience_types'] else []), [5.2, 3.6, 8.4], ['l', 'l', 'l'])
+        ([[a['name'], f'{sym}{a["spend"]:,.0f}', f'{EC} {fe(a["roas"])}'] for a in rep['audience_types']] if rep['audience_types'] else []), [5.2, 3.6, 8.4], ['l', 'l', 'l'])
 
     # 3 campaigns
     h1('Кампанії за бюджетом')
     c_ = rep['campaigns']
     picture(hbar([x['name'][:34] for x in c_], [x['spend'] for x in c_], 'spend.png', f'Витрати, {cur}', fmt=sym + '{:,.0f}'), 15.2, figcap('Розподіл витрат за кампаніями'))
-    table(['Кампанія', 'Стан', 'Витрати', 'Покупки', 'Ціна', 'ROAS', 'Част.', 'CTR'],
+    table(['Кампанія', 'Стан', 'Витрати', RL, 'Ціна', EH, 'Част.', 'CTR'],
           [[x['name'][:36], x['state'], f'{sym}{x["spend"]:,.0f}', f'{x["pur"]:.0f}', f'{sym}{x["cpa"]:.2f}' if x['cpa'] else '—', f'{x["roas"]:.2f}', f'{x["freq"]:.1f}', f'{x["ctr"]:.2f}%'] for x in c_],
           [5.4, 1.9, 1.7, 1.6, 1.5, 1.4, 1.3, 1.4], ['l', 'l', 'r', 'r', 'r', 'r', 'r', 'r'], colorcol=(5, cf))
-    picture(hbar([x['name'][:34] for x in c_], [x['roas'] for x in c_], 'roas.png', 'ROAS (пунктир: середній по акаунту)', gc, ref=roas), 15.2, figcap('ROAS кампаній'))
+    picture(hbar([x['name'][:34] for x in c_], [x['roas'] for x in c_], 'roas.png', EBAR + ' (пунктир: середній по акаунту)', gc, ref=roas), 15.2, figcap(EBAR + ' кампаній'))
 
     if rep['ads']:
         h1('Креативи')
-        table(['Оголошення', 'Стан', 'Витрати', 'Покупки', 'ROAS', 'Част.', 'Якість', 'Конверсія'],
+        table(['Оголошення', 'Стан', 'Витрати', RL, EH, 'Част.', 'Якість', 'Конверсія'],
               [[a['name'][:34], a['state'], f'{sym}{a["spend"]:,.0f}', f'{a["pur"]:.0f}', f'{a["roas"]:.2f}', f'{a["freq"]:.1f}', a['quality'], a['conv']] for a in rep['ads']],
               [4.6, 1.9, 1.7, 1.6, 1.4, 1.3, 2.2, 2.5], ['l', 'l', 'r', 'r', 'r', 'r', 'l', 'l'], colorcol=(4, cf))
         para('Якість і конверсія: рейтинги Meta відносно конкурентів на тих самих показах. «—» означає, що рейтингу немає.', size=9, color=MUT)
     if rep['placements']:
         h1('Плейсменти'); pl = rep['placements']
-        picture(hbar([x['name'] for x in pl], [x['roas'] for x in pl], 'placement.png', 'ROAS за плейсментами (пунктир: середній)', gc, ref=roas), 15.2, figcap('ROAS за плейсментами'))
-        table(['Плейсмент', 'Витрати', 'Частка', 'Покупки', 'Ціна', 'ROAS', 'CTR'],
+        picture(hbar([x['name'] for x in pl], [x['roas'] for x in pl], 'placement.png', EBAR + ' за плейсментами (пунктир: середній)', gc, ref=roas), 15.2, figcap(EBAR + ' за плейсментами'))
+        table(['Плейсмент', 'Витрати', 'Частка', RL, 'Ціна', EH, 'CTR'],
               [[x['name'], f'{sym}{x["spend"]:,.0f}', f'{x["share"]:.0f}%', f'{x["pur"]:.0f}', f'{sym}{x["cpa"]:.2f}' if x['cpa'] else '—', f'{x["roas"]:.2f}', f'{x["ctr"]:.2f}%'] for x in pl],
               [4.4, 2.0, 1.8, 2.0, 2.0, 1.8, 1.8], ['l', 'r', 'r', 'r', 'r', 'r', 'r'], colorcol=(5, cf))
         para('Плейсменти з витратами менше 5 не показані. Малі вибірки дають напрям для тесту, а не висновок.', size=9, color=MUT)
     if rep['ages']:
         h1('Аудиторія: вік і стать'); ag = rep['ages']
-        picture(hbar([x['name'] for x in ag], [x['roas'] for x in ag], 'age.png', 'ROAS за віком (пунктир: середній)', gc, ref=roas), 15.2, figcap('ROAS за віком'))
-        table(['Вік', 'Витрати', 'Частка', 'Покупки', 'Ціна', 'ROAS'], [[x['name'], f'{sym}{x["spend"]:,.0f}', f'{x["share"]:.0f}%', f'{x["pur"]:.0f}', f'{sym}{x["cpa"]:.2f}' if x['cpa'] else '—', f'{x["roas"]:.2f}'] for x in ag],
+        picture(hbar([x['name'] for x in ag], [x['roas'] for x in ag], 'age.png', EBAR + ' за віком (пунктир: середній)', gc, ref=roas), 15.2, figcap(EBAR + ' за віком'))
+        table(['Вік', 'Витрати', 'Частка', RL, 'Ціна', EH], [[x['name'], f'{sym}{x["spend"]:,.0f}', f'{x["share"]:.0f}%', f'{x["pur"]:.0f}', f'{sym}{x["cpa"]:.2f}' if x['cpa'] else '—', f'{x["roas"]:.2f}'] for x in ag],
               [3.2, 2.4, 2.2, 2.4, 2.4, 2.4], ['l', 'r', 'r', 'r', 'r', 'r'], colorcol=(5, cf))
         if rep['female_share'] is not None: para(f'Жінки: {rep["female_share"]:.0f}% витрат.', size=10)
     if rep['trend']:
         h1('Динаміка'); t_ = rep['trend']
-        table(['Період', 'Витрати', 'ROAS'], [['Попередні 14 днів', f'{sym}{t_["spend_prev"]:,.0f}', f'{t_["roas_prev"]:.2f}'], ['Останні 14 днів', f'{sym}{t_["spend_last"]:,.0f}', f'{t_["roas_last"]:.2f}']], [6, 4, 4], ['l', 'r', 'r'])
+        table(['Період', 'Витрати', EH], [['Попередні 14 днів', f'{sym}{t_["spend_prev"]:,.0f}', f'{t_["roas_prev"]:.2f}'], ['Останні 14 днів', f'{sym}{t_["spend_last"]:,.0f}', f'{t_["roas_last"]:.2f}']], [6, 4, 4], ['l', 'r', 'r'])
     if rep['funnel']:
         h1('Воронка')
         table(['Етап', 'Кількість', 'Конверсія з попереднього'], [[x['stage'], f'{x["value"]:,.0f}', f'{x["conv"]:.1f}%' if x['conv'] is not None else '—'] for x in rep['funnel']], [6, 4, 6], ['l', 'r', 'r'])

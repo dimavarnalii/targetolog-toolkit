@@ -18,6 +18,8 @@
   "api_version": "v23.0",
   "token_env": "META_TOKEN",
   "purchase_action": "purchase",
+  "objective_focus": "auto",
+  "result_actions": {},
 
   "min_spend_for_conclusion": 50,
   "concentration_warn_pct": 30,

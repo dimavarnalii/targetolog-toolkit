@@ -65,8 +65,50 @@ def action(lst, atype):
     return 0.0
 
 
+# Мета кампанії Meta -> сімейство цілей. Результат рахується за метою, бо в різних цілей різний «результат».
+FAMILY = {
+    'OUTCOME_SALES': 'SALES', 'CONVERSIONS': 'SALES', 'PRODUCT_CATALOG_SALES': 'SALES', 'CATALOG_SALES': 'SALES',
+    'OUTCOME_LEADS': 'LEADS', 'LEAD_GENERATION': 'LEADS',
+    'OUTCOME_ENGAGEMENT': 'ENGAGEMENT', 'POST_ENGAGEMENT': 'ENGAGEMENT', 'PAGE_LIKES': 'ENGAGEMENT', 'MESSAGES': 'ENGAGEMENT',
+    'VIDEO_VIEWS': 'ENGAGEMENT', 'EVENT_RESPONSES': 'ENGAGEMENT',
+    'OUTCOME_TRAFFIC': 'TRAFFIC', 'LINK_CLICKS': 'TRAFFIC',
+    'OUTCOME_AWARENESS': 'AWARENESS', 'REACH': 'AWARENESS', 'BRAND_AWARENESS': 'AWARENESS',
+    'OUTCOME_APP_PROMOTION': 'APP', 'APP_INSTALLS': 'APP',
+}
+LABEL = {'SALES': 'Покупки', 'LEADS': 'Ліди', 'ENGAGEMENT': 'Взаємодії', 'TRAFFIC': 'Переходи на сторінку',
+         'AWARENESS': 'Охоплення', 'APP': 'Встановлення', 'OTHER': 'Результати'}
+# Дії Meta, що вважаються результатом (беруться перша з ненульових). Можна змінити в config.json -> result_actions
+DEFAULT_ACTIONS = {
+    'SALES': ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'],
+    'LEADS': ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead'],
+    'ENGAGEMENT': ['onsite_conversion.messaging_conversation_started_7d', 'post_engagement', 'video_view'],
+    'TRAFFIC': ['landing_page_view'],
+    'APP': ['mobile_app_install', 'app_install'],
+}
+
+
+def family_of(objective):
+    return FAMILY.get((objective or '').upper(), 'OTHER')
+
+
+def result_of(r, fam, cfg):
+    """(кількість результатів, назва) для рядка insights за метою кампанії."""
+    if fam == 'AWARENESS':
+        return float(r.get('reach', 0) or 0), LABEL[fam]
+    acts = (cfg.get('result_actions') or {}).get(fam) or DEFAULT_ACTIONS.get(fam, [])
+    for at in acts:
+        v = action(r.get('actions'), at)
+        if v:
+            return v, LABEL[fam]
+    if fam == 'TRAFFIC':  # немає подій перегляду сторінки: беремо кліки за посиланням
+        return float(r.get('inline_link_clicks', 0) or 0), 'Кліки за посиланням'
+    return 0.0, LABEL.get(fam, LABEL['OTHER'])
+
+
 def metrics_row(r, cfg):
     pa = cfg['purchase_action']
+    fam = family_of(r.get('objective'))
+    res, rlabel = result_of(r, fam, cfg)
     spend = float(r.get('spend', 0) or 0)
     imps = float(r.get('impressions', 0) or 0)
     clicks = float(r.get('inline_link_clicks', 0) or 0)
@@ -80,6 +122,7 @@ def metrics_row(r, cfg):
         'Landing page views': action(r.get('actions'), 'landing_page_view'),
         'Adds to cart': action(r.get('actions'), 'add_to_cart'),
         'Checkouts initiated': action(r.get('actions'), 'initiate_checkout'),
+        'Objective': fam, 'Results': res, 'Result type': rlabel,
     }
 
 
@@ -99,7 +142,7 @@ def run(cfg, api):
     act = cfg['ad_account_id']
     tr = json.dumps({'since': cfg['period_start'], 'until': cfg['period_end']})
     common = {'time_range': tr, 'limit': 500}
-    base_fields = 'spend,impressions,reach,frequency,cpm,inline_link_clicks,inline_link_click_ctr,actions,action_values'
+    base_fields = 'objective,spend,impressions,reach,frequency,cpm,inline_link_clicks,inline_link_click_ctr,actions,action_values'
     period = {'Reporting starts': cfg['period_start'], 'Reporting ends': cfg['period_end']}
     data = cfg['_data']
 
@@ -144,8 +187,8 @@ def run(cfg, api):
 
     # 4. по днях (рівень акаунта)
     rows = []
-    for r in api.get(f'{act}/insights', dict(common, level='account', fields=base_fields, time_increment=1)):
-        row = {'Day': r.get('date_start', '')}; row.update(metrics_row(r, cfg)); rows.append(row)
+    for r in api.get(f'{act}/insights', dict(common, level='campaign', fields=f'campaign_name,{base_fields}', time_increment=1)):
+        row = {'Day': r.get('date_start', ''), 'Campaign name': r.get('campaign_name', '')}; row.update(metrics_row(r, cfg)); rows.append(row)
     write_csv(os.path.join(data, 'daily.csv'), rows)
 
 
