@@ -91,8 +91,40 @@ def family_of(objective):
     return FAMILY.get((objective or '').upper(), 'OTHER')
 
 
+def indicator_label(ind):
+    """Зрозуміла назва типу результату з індикатора поля results (profile_visit_view, conversions:offsite_conversion.fb_pixel_custom.X ...)."""
+    i = (ind or '').lower()
+    if 'fb_pixel_custom.' in i: return 'Подія пікселя «' + ind.split('fb_pixel_custom.', 1)[1] + '»'
+    for key, lab in (('purchase', 'Покупки'), ('lead', 'Ліди'), ('messaging_conversation', 'Розмови в месенджері'),
+                     ('profile_visit', 'Перегляди профілю'), ('landing_page_view', 'Перегляди сторінки'), ('link_click', 'Кліки за посиланням'),
+                     ('post_engagement', 'Взаємодії'), ('video_view', 'Перегляди відео'), ('reach', 'Охоплення'),
+                     ('install', 'Встановлення'), ('add_to_cart', 'Додавання в кошик'), ('complete_registration', 'Реєстрації')):
+        if key in i: return lab
+    return ind or 'Результати'
+
+
+def parse_results(r):
+    """Поле results з Insights API: те саме «Результат», що в Ads Manager (залежить від оптимізації кампанії).
+    Повертає (кількість, назва) або None, якщо поля немає в рядку."""
+    res = r.get('results')
+    if not res:
+        return None
+    total = 0.0
+    for item in res:
+        vals = item.get('values') or []
+        if vals:
+            total += float(vals[0].get('value', 0) or 0)
+    return total, indicator_label(res[0].get('indicator'))
+
+
 def result_of(r, fam, cfg):
-    """(кількість результатів, назва) для рядка insights за метою кампанії."""
+    """(кількість результатів, назва) для рядка insights. Основне джерело: поле results (як в Ads Manager);
+    якщо API його не віддає, береться стандартна дія за метою кампанії."""
+    if cfg.get('_has_results'):
+        pr = parse_results(r)
+        if pr is not None:   # (0, назва) теж остаточна відповідь: результатів немає
+            return pr
+        # поля results немає (наприклад, ліди з миттєвих форм): нижче стандартна дія за метою
     if fam == 'AWARENESS':
         return float(r.get('reach', 0) or 0), LABEL[fam]
     acts = (cfg.get('result_actions') or {}).get(fam) or DEFAULT_ACTIONS.get(fam, [])
@@ -142,9 +174,15 @@ def run(cfg, api):
     act = cfg['ad_account_id']
     tr = json.dumps({'since': cfg['period_start'], 'until': cfg['period_end']})
     common = {'time_range': tr, 'limit': 500}
-    base_fields = 'objective,spend,impressions,reach,frequency,cpm,inline_link_clicks,inline_link_click_ctr,actions,action_values'
+    base_fields = 'objective,results,spend,impressions,reach,frequency,cpm,inline_link_clicks,inline_link_click_ctr,actions,action_values'
     period = {'Reporting starts': cfg['period_start'], 'Reporting ends': cfg['period_end']}
     data = cfg['_data']
+    # чи віддає API поле results (відповідає стовпцю «Results» в Ads Manager)
+    try:
+        probe = api.get(f'{act}/insights', dict(common, level='campaign', fields='spend,results', limit=100))
+        cfg['_has_results'] = any(r.get('results') for r in probe)
+    except SystemExit:
+        cfg['_has_results'] = False
 
     # 1. кампанії, групи, оголошення: усі об'єкти (щоб порахувати кампанії без витрат) + insights
     for level, edge, idf, namef, delf, namecol, delcol in (

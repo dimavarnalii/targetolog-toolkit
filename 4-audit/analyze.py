@@ -75,6 +75,14 @@ def analyze(cfg):
     val_tot = sum(num(r.get(VAL)) for r in camp)
     M = 'roas' if (focus in ('SALES', '') and val_tot > 0) else 'cpr'
     RL = LABEL.get(focus, 'Покупки' if M == 'roas' else 'Результати')
+    mixed_types = []
+    if M != 'roas' and 'Result type' in camp[0]:  # назва результату: домінуючий тип за витратами, якщо його частка від 70%
+        tsp = collections.Counter()
+        for r in camp:
+            if r.get('Result type') and num(r.get(PUR)) > 0: tsp[r['Result type']] += num(r.get(SP))
+        mixed_types = [k for k, v in tsp.items() if v >= 0.1 * sum(tsp.values())] if len(tsp) > 1 else []
+        if tsp and tsp.most_common(1)[0][1] >= 0.7 * sum(tsp.values()):
+            RL = tsp.most_common(1)[0][0]
     CPAL = 'ціна покупки' if M == 'roas' else 'ціна результату'
     EFFT = 'вищий ROAS' if M == 'roas' else 'нижча ціна результату'
     site = json.load(open(os.path.join(D, 'site.json'), encoding='utf-8')) if os.path.exists(os.path.join(D, 'site.json')) else None
@@ -297,9 +305,10 @@ def analyze(cfg):
     else:
         prios.append({'action': f'Звірити кількість результатів ({RL.lower()}) із реальними заявками чи CRM', 'effect': 'розуміння реальної ціни результату', 'urgency': 'місяць'})
 
+    mix_note = ([f'У головній цілі змішані типи результату ({", ".join(mixed_types)}): їх складено разом, як у підсумку Ads Manager. Порівнюйте кампанії одного типу.'] if len(mixed_types) > 1 else [])
     limits = ['Дані: ' + ', '.join(n for n, ok in (('кампанії', True), ('групи', bool(adsets)), ('оголошення', bool(ads)), ('плейсменти', bool(pl_rows)), ('вік і стать', bool(ag_rows)), ('по днях', bool(daily))) if ok) + ' за один період.',
               'Атрибуція кабінету (вікно за замовчуванням) завищує або занижує результат порівняно з реальними продажами.',
-              f'Вибірки до ${MIN} не дають висновків.', 'Висновки це правила на цифрах: фінальне рішення за спеціалістом.']
+              f'Вибірки до ${MIN} не дають висновків.', *mix_note, 'Висновки це правила на цифрах: фінальне рішення за спеціалістом.']
     missing = [t for t, ok in (('Розріз по днях (тренд результативності, зростання частоти)', bool(daily)), ('Воронка (покази, кліки, перегляди сторінки, результати)', funnel is not None), ('Ретаргетинг проти холодної аудиторії (потрібні групи оголошень з типами в назвах)', bool(aud)), ('Звірка з Google Analytics чи CRM', False)) if not ok]
 
     return {'meta': {'client': cfg['client_name_anonymized'] if anon else cfg['client_name'], 'period': period, 'currency': cur, 'anonymized': anon, 'site_url': None if anon else (site or {}).get('url'), 'generated': datetime.date.today().isoformat()},
