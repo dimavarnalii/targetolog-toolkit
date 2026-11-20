@@ -22,7 +22,7 @@
 - 2) python 2-video/ad_creatives/make_proxies.py <папка_сирих>   (проксі 1080x1920, 30 fps)
 - 3) python 2-video/ad_creatives/transcribe_medium.py --lang <мова> <клі1> <клі2>   (довго, у фоні, не паралельно з рендером). Перший запуск сам завантажує модель Whisper з Hugging Face (~1,5 ГБ для medium): спершу запитай згоду. Інша модель: --model large-v3-turbo. Файл результату завжди *.words_m.json.
 - 4) python 2-video/ad_creatives/tl_inspect.py <клі>: покажи користувачу фрази, узгодь exclude/fixes.
-- 4б) Перебивки: library_catalog.py scan і describe (опис кадрів за контактним листом), за згодою fetch_stock.py (Pexels/Pixabay, ключ у змінній середовища), plan_broll.py brief і check; кадри ДОСЛІВНО за змістом, закрий склейки.
+- 4б) Перебивки: library_catalog.py scan і describe (опис кадрів за контактним листом), нові кадри з Mixkit/Pexels/Pixabay: знайди сам, покажи сторінку, за згодою fetch_stock.py add --yes (без ключів); plan_broll.py brief і check; кадри ДОСЛІВНО за змістом, закрий склейки.
 - 5) Склади creatives.json за зразком creatives.example.json. Хук: лише те, що звучить у відео або підтверджено користувачем.
 - 6) Семпл: python 2-video/ad_creatives/build_creative.py creatives.json <name>. Покажи кадри (початок, середина, кінець). Повний набір лише після «ок».
 
@@ -36,5 +36,5 @@
 - Не копіюй у пакет чужу музику, шрифти, кліпи. Скрипти пакета не редагуй без запиту.
 
 ## KNOWN_LIMITS
-- Не перевірено: музика, бібліотека перебивок, ffmpeg старше 7. Режими shorts і avatar (Remotion) необов'язкові й описані в references/.
+- Pro потребує ffmpeg 7+ (перевірено 9.0.2). Не перевірено: музика, macOS/Linux, стоки наживо. Режими shorts і avatar (Remotion) необов'язкові й описані в references/.
 

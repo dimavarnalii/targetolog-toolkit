@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 """Пошук і завантаження перебивок зі СТОКІВ з вільною ліцензією через їхні офіційні API (Pexels, Pixabay).
 
-Це не парсинг сайтів і не YouTube: лише офіційні API з вашим безкоштовним ключем.
-  PEXELS_API_KEY   (pexels.com/api)      PIXABAY_API_KEY   (pixabay.com/api/docs)
-Ключі лише змінними середовища, у чат їх не вставляти.
+Два способи, ключі не обов'язкові:
+  1. БЕЗ КЛЮЧІВ (основний): агент сам знаходить кадр на сайті зі вільною ліцензією (Mixkit, Pexels, Pixabay: браузер, пошук), показує
+     користувачу сторінку кліпа, отримує згоду й додає прямий файл командою `add` (нижче). Не YouTube і не масовий парсинг.
+  2. З ключем (необов'язково): офіційні API Pexels/Pixabay, команди `search` і `get`.
+     PEXELS_API_KEY (pexels.com/api), PIXABAY_API_KEY (pixabay.com/api/docs): лише змінними середовища, у чат не вставляти.
+
+  python fetch_stock.py add --source mixkit|pexels|pixabay --url <пряме посилання на файл .mp4/.jpg> --page <сторінка кліпа> [--author "…"] --yes
+      завантажує ОДИН файл, який вказав агент (адреса має бути на дозволеному CDN), у <VM_ROOT>/library/stock/ і дописує в library/catalog.json
+      (джерело, ліцензія, сторінка). Далі: library_catalog.py scan і describe. `--yes` лише після згоди користувача.
 
   python fetch_stock.py search --source pexels|pixabay --query "counting cash" [--kind video|photo] [--count 6]
       лише показує кандидатів (посилання, автор, тривалість). Нічого не завантажує.
@@ -11,7 +17,7 @@
       завантажує обрані кандидати в <VM_ROOT>/library/stock/ і дописує їх у library/catalog.json
       (опис = запит, джерело, автор, посилання). `--yes` лише після згоди користувача на завантаження.
 
-Куди звертається: api.pexels.com, pixabay.com та CDN цих сервісів (*.pexels.com, *.pixabay.com). Більше нікуди.
+Куди звертається: *.pexels.com, *.pixabay.com, *.mixkit.co (API лише з ключем, файли через `add`). Більше нікуди.
 Ліцензії Pexels і Pixabay дозволяють комерційне використання без атрибуції, але з обмеженнями (наприклад, не
 подавати людей зі знімків як схвалення продукту, не продавати файли як є). Перевір актуальні умови сервісу сам.
 Запити англійською дають кращі результати. Для вертикального відео береться portrait.
@@ -29,8 +35,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vm_config as vm  # noqa: E402
 
-ALLOWED = ("pexels.com", "pixabay.com")
-LICENSE = {"pexels": "Pexels License (вільна, комерційна; перевір умови: pexels.com/license)",
+ALLOWED = ("pexels.com", "pixabay.com", "mixkit.co")
+LICENSE = {"mixkit": "Mixkit Free License (вільна, комерційна; перевір умови: mixkit.co/license)",
+           "pexels": "Pexels License (вільна, комерційна; перевір умови: pexels.com/license)",
            "pixabay": "Pixabay Content License (вільна, комерційна; перевір умови: pixabay.com/service/license-summary)"}
 UA = {"User-Agent": "toolkit-stock/1.0"}
 
@@ -125,10 +132,40 @@ def add_to_catalog(entries):
     cat_path.write_text(json.dumps(cat, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+MAX_BYTES = 400 * 1024 * 1024
+FILE_EXT = {".mp4", ".mov", ".m4v", ".jpg", ".jpeg", ".png", ".webp"}
+
+
+def add_one(source, url, page, author, yes):
+    """Завантажити один файл, який вказав агент (без ключів). Повертає запис каталогу."""
+    if not host_ok(url):
+        sys.exit(f"Відмова: адреса поза дозволеними сервісами (*.pexels.com, *.pixabay.com, *.mixkit.co, лише https): {url[:90]}")
+    path = urllib.parse.urlparse(url).path
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in FILE_EXT:
+        sys.exit(f"Відмова: очікується пряме посилання на файл {sorted(FILE_EXT)}, а не сторінка: {url[:90]}")
+    if not yes:
+        sys.exit("Завантаження лише з прапором --yes (після згоди користувача).")
+    out = vm.LIBRARY / "stock"
+    out.mkdir(parents=True, exist_ok=True)
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", os.path.splitext(os.path.basename(path))[0])[:60] or "clip"
+    name = f"{source}_{stem}{ext}"
+    download(url, out / name)
+    if (out / name).stat().st_size > MAX_BYTES:
+        (out / name).unlink()
+        sys.exit("Файл завеликий (понад 400 МБ): видалено.")
+    return {"file": f"stock/{name}", "kind": "photo" if ext in {".jpg", ".jpeg", ".png", ".webp"} else "video", "duration": 0,
+            "width": 0, "height": 0, "description": "", "tags": [], "sensitive": False, "sensitive_reason": "", "disabled": False,
+            "source": f"{source}", "license": LICENSE[source], "author": author, "page": page}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", nargs="?", choices=["search", "get"])
-    ap.add_argument("--source", choices=["pexels", "pixabay"], default="pexels")
+    ap.add_argument("cmd", nargs="?", choices=["search", "get", "add"])
+    ap.add_argument("--url")
+    ap.add_argument("--page", default="")
+    ap.add_argument("--author", default="")
+    ap.add_argument("--source", choices=["pexels", "pixabay", "mixkit"], default="pexels")
     ap.add_argument("--query")
     ap.add_argument("--kind", choices=["video", "photo"], default="video")
     ap.add_argument("--count", type=int, default=6)
@@ -138,8 +175,16 @@ def main():
     a = ap.parse_args()
     if a.self_test:
         return self_test()
+    if a.cmd == "add":
+        if not a.url:
+            sys.exit("Потрібен --url (пряме посилання на файл) і --page (сторінка кліпа).")
+        add_to_catalog([add_one(a.source, a.url, a.page, a.author, a.yes)])
+        print("Додано. Далі: library_catalog.py scan, потім describe для опису кадру.")
+        return
     if not a.cmd or not a.query:
         sys.exit(__doc__)
+    if a.source == "mixkit":
+        sys.exit("Mixkit не має API: знайди кліп на сайті й додай командою add.")
     cands = search(a.source, a.query, a.kind, min(max(a.count, 1), 15))
     for i, c in enumerate(cands, 1):
         d = f", {c['duration']} с" if c["duration"] else ""
@@ -180,6 +225,13 @@ def self_test():
     pb = {"hits": [{"id": 5, "pageURL": "https://pixabay.com/p/5", "user": "B", "duration": 4, "videos": {"large": {"url": "https://cdn.pixabay.com/v.mp4"}}}]}
     c = search("pixabay", "x", "video", 3, fetch=lambda u, h=None: pb)
     assert c[0]["ext"] == ".mp4" and c[0]["author"] == "B"
+    import tempfile
+    for bad in ("https://evil.com/a.mp4", "http://assets.mixkit.co/a.mp4", "https://assets.mixkit.co/videos/1/page"):
+        try:
+            add_one("mixkit", bad, "", "", True)
+            raise AssertionError("мало відмовити: " + bad)
+        except SystemExit:
+            pass
     print("self-test ok")
 
 
