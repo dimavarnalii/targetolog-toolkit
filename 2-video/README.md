@@ -7,6 +7,7 @@
 
 ```
 SKILL.md                    скіл для Claude Code (вставте у .claude/skills/ad-montage/SKILL.md)
+pro/                        Pro-монтаж: рушій (Python + Remotion), README і SKILL.md в ній
 scripts/                    спільні скрипти
   vm_config.py                налаштування (змінні середовища) + перевірка ffmpeg/faster-whisper
   transcribe_words.py         транскрипт зі словами й таймкодами

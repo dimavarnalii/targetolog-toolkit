@@ -1,0 +1,6 @@
+av==18.1.0
+ctranslate2==4.8.2
+faster-whisper==1.2.1
+numpy==2.4.6
+opencv-python-headless==5.0.0.93
+pillow==12.3.0

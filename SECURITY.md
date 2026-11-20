@@ -15,6 +15,7 @@
 |---|---|---|---|
 | `1-dashboard/fetch_facts.py` | graph.facebook.com (Meta Marketing API) | зчитати щоденну статистику кабінетів | ваш токен із змінної `META_TOKEN`; лише запити читання (GET); пише файли в папку `out/` |
 | `4-audit/fetch_meta.py` | graph.facebook.com (Meta Marketing API) | зчитати статистику кабінету | ваш токен із змінної `META_TOKEN`; лише запити читання (GET) |
+| `2-video/pro/fetch_models.py` | github.com (модель YuNet), huggingface.co (Whisper) | завантажити моделі (лише з `--yes`) | нічого, окрім адрес моделей; YuNet перевіряється за SHA256 |
 | `2-video/scripts/fetch_stock.py` | api.pexels.com, pixabay.com та їхні CDN (*.pexels.com, *.pixabay.com) | знайти й (лише з `--yes`) завантажити перебивки з вільних стоків | запит пошуку й ваш API-ключ зі змінної `PEXELS_API_KEY`/`PIXABAY_API_KEY`; інші адреси скрипт відхиляє |
 | `4-audit/site_check.py` | сайт клієнта; googleapis.com (PageSpeed Insights) | перевірити сторінку | адреса сайту; необов'язковий ключ `PSI_API_KEY` |
 | `2-video/scripts/yt_fetch.py` | через стороннього `yt-dlp` | завантажити відео за посиланням, яке ви дали | лише це посилання; режим необов'язковий |
@@ -26,6 +27,7 @@
 ## Що запускається на вашому комп'ютері
 
 - `2-video/*`: запускає `ffmpeg` і `ffprobe` та скрипти з цієї ж папки (`subprocess`). `scripts/repeats.py`, `cut_phrase.py`, `burn_subs.py` теж запускають лише `ffmpeg` і модель Whisper (та сама, що в транскрипції; завантаження моделі лише з вашої згоди), у мережу більше нікуди не звертаються. Бібліотека `faster-whisper` (це не наш код) під час першого запуску сама завантажує модель мовлення з Hugging Face.
+- `2-video/pro/*`: `run.py` запускає скрипти своєї папки та `ffmpeg`; рендер Remotion: `npx remotion` (Node.js, headless Chrome) з папки `pro/remotion`. `npm install` ставить сторонні пакети (remotion, react) з npm, `pip install` ставить faster-whisper, numpy, opencv, pillow: усе лише за вашою згодою. `plan.py` викликає зовнішній `claude -p` ТІЛЬКИ якщо ви самі задали `MONTAGE_BRAIN=cli`; за замовчуванням монтажний лист складає ваш ШІ-агент. Вирівнювання слів (torch, ваги MMS) за замовчуванням вимкнене. Remotion при першому рендері сам завантажує headless-Chrome (з серверів Remotion/Google), а `npm install` запускає install-скрипти залежностей (esbuild): це поведінка сторонніх пакетів, не нашого коду.
 - `4-audit/run_audit.py`: запускає інші скрипти цієї ж папки.
 - `5-landing/selftest.py`: запускає ваш Chrome у фоновому режимі на тимчасовій копії сторінки й видаляє тимчасові папки, які сам створив. У тестовій копії піксель вимкнено, а відправка заявки підмінена заглушкою, тож тест не звертається ні до Meta, ні до вашого endpoint.
 - `5-landing/build_landing.py`, `check_page.py`: нічого не запускають і не звертаються до мережі. `build_landing.py` читає `brief.json` та `img/` поруч із брифом і пише лише в папку `out/` (index.html, thanks.html, img/). `lead_endpoint.gs` у `out/` не копіюється: `out/` призначена для публікації.
