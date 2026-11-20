@@ -39,12 +39,15 @@ def pick(items, name):
     return 0.0
 
 
-def http_get(url, fetcher=None):
+def http_get(url, fetcher=None, token=None):
     if fetcher:
         return fetcher(url)
     for attempt in range(4):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "toolkit-dashboard/1.0"})
+            headers = {"User-Agent": "toolkit-dashboard/1.0"}
+            if token:
+                headers["Authorization"] = "Bearer " + token  # токен у заголовку, не в адресі
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
@@ -65,15 +68,21 @@ def fetch_account(account_id, since, until, token, fetcher=None):
     params = {
         "level": "ad", "time_increment": 1, "fields": FIELDS, "limit": 500,
         "time_range": json.dumps({"since": since, "until": until}),
-        "access_token": token,
     }
     url = f"https://graph.facebook.com/{API_VERSION}/{account_id}/insights?" + urllib.parse.urlencode(params)
     rows = []
     while url:
-        data = http_get(url, fetcher)
+        data = http_get(url, fetcher, token)
         rows.extend(data.get("data", []))
         url = data.get("paging", {}).get("next")
     return rows
+
+
+def fetch_account_info(account_id, token, fetcher=None):
+    """Статус, валюта й часовий пояс кабінету (1 = активний, 9 = пільговий період оплати)."""
+    url = f"https://graph.facebook.com/{API_VERSION}/{account_id}?" + urllib.parse.urlencode(
+        {"fields": "account_status,currency,timezone_name"})
+    return http_get(url, fetcher, token)
 
 
 def to_fact(row, project, rtype, action):
@@ -95,13 +104,19 @@ def build(config, days, token, fetcher=None, today=None):
     for c in config["clients"]:
         name, rtype = c["project"], c.get("type", "lead")
         action = c.get("result_action") or DEFAULT_ACTION.get(rtype, "lead")
+        info = fetch_account_info(c["account_id"], token, fetcher)
+        cur = info.get("currency", "USD")
+        if cur != "USD":
+            print(f"УВАГА: кабінет {name} у валюті {cur}. Дашборд показує знак $ і пороги в доларах: "
+                  "переведіть пороги в page.html або використовуйте кабінет у USD.", file=sys.stderr)
         rows = fetch_account(c["account_id"], since, until, token, fetcher)
         facts.extend(to_fact(r, name, rtype, action) for r in rows)
         projects.append({"project": name, "type": rtype, "result_label": c.get("result_label", "Результати"),
                          "target_cpr": c.get("target_cpr", 0), "target_roas": c.get("target_roas", 0)})
         clients.append({"project": name, "status": c.get("status", "active"), "monthly_fee": c.get("monthly_fee", 0),
                         "client_since": c.get("client_since"), "until": c.get("until"),
-                        "monthly_budget": c.get("monthly_budget", 0), "account_status": 1})
+                        "monthly_budget": c.get("monthly_budget", 0),
+                        "account_status": int(info.get("account_status", 1))})
     facts.sort(key=lambda f: (f["date"], f["project"], f["campaign"], f["adset"], f["ad"]))
     return facts, projects, clients
 
@@ -126,12 +141,15 @@ def self_test():
     calls = []
 
     def fetcher(url):
+        if "/insights" not in url and "next" not in url:
+            return {"account_status": 9, "currency": "USD"}
         calls.append(url)
         return pages[len(calls) - 1 if len(calls) <= 2 else 1]
 
     cfg = {"clients": [{"project": "Тест", "account_id": "act_1", "type": "lead", "target_cpr": 5}]}
     facts, projects, _ = build(cfg, 7, "TOKEN", fetcher, today=dt.date(2026, 1, 3))
-    assert len(calls) == 2 and "access_token=TOKEN" in calls[0], "пагінація"
+    assert len(calls) == 2 and "access_token" not in calls[0], "пагінація або токен в адресі"
+    assert _[0]["account_status"] == 9, "статус кабінету"
     assert facts[0]["results"] == 3 and facts[0]["spend"] == 10.5 and facts[0]["clicks"] == 20, facts[0]
     cfg2 = {"clients": [{"project": "Магазин", "account_id": "act_2", "type": "purchase"}]}
     calls.clear()
@@ -146,6 +164,7 @@ def main():
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--days", type=int, default=30)
     ap.add_argument("--out", default="out")
+    ap.add_argument("--only", help="узяти лише проєкт з такою назвою (для першої перевірки на одному кабінеті)")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:
@@ -157,11 +176,16 @@ def main():
         raise SystemExit("--days має бути від 1 до 90")
     with open(a.config, encoding="utf-8") as f:
         config = json.load(f)
-    facts, projects, clients = build(config, a.days, token)
+    if a.only:
+        config = {"clients": [c for c in config["clients"] if c["project"] == a.only]}
+        if not config["clients"]:
+            raise SystemExit(f"У config.json немає проєкту «{a.only}»")
+    facts, projects, clients = build(config, a.days, token)  # помилка тут не залишає напівзаписаних файлів
     os.makedirs(a.out, exist_ok=True)
-    write_json(os.path.join(a.out, "facts.json"), facts)
-    write_json(os.path.join(a.out, "projects.json"), projects)
-    write_json(os.path.join(a.out, "clients.json"), clients)
+    for name, obj in (("facts", facts), ("projects", projects), ("clients", clients)):
+        tmp = os.path.join(a.out, name + ".json.tmp")
+        write_json(tmp, obj)
+        os.replace(tmp, os.path.join(a.out, name + ".json"))
     print(f"Готово: {len(facts)} рядків, {len(projects)} проєктів -> {a.out}")
 
 

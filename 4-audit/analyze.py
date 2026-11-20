@@ -5,7 +5,7 @@
 
 Запуск: python analyze.py --config config.json
 """
-import argparse, collections, datetime, json, os, sys
+import re, argparse, collections, datetime, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import load_config, with_defaults, read_csv, num
 
@@ -33,6 +33,14 @@ def analyze(cfg):
     camp = read_csv(os.path.join(D, 'campaigns.csv'))
     if not camp:
         sys.exit(f'Немає {D}\\campaigns.csv. Покладіть експорт кампаній (Ads Manager) або запустіть fetch_meta.py.')
+    # валюта береться із заголовка стовпця витрат: «Amount spent (UAH)» і т. д.
+    global SP
+    for h in camp[0]:
+        m = re.fullmatch(r'Amount spent \((\w{3})\)', h.strip())
+        if m:
+            SP = h; cfg['currency'] = m.group(1); break
+    else:
+        sys.exit('У файлі кампаній немає стовпця «Amount spent (XXX)». Додайте його в колонки експорту.')
     adsets = read_csv(os.path.join(D, 'adsets.csv')); ads = read_csv(os.path.join(D, 'ads.csv'))
     pl_rows = read_csv(os.path.join(D, 'placement.csv')); ag_rows = read_csv(os.path.join(D, 'agegender.csv'))
     daily = read_csv(os.path.join(D, 'daily.csv'))
@@ -117,7 +125,7 @@ def analyze(cfg):
         if v_rows and o_rows:
             vs, os_ = sum(num(r[SP]) for r in v_rows), sum(num(r[SP]) for r in o_rows)
             vid_roas, oth_roas = sum(num(r[VAL]) for r in v_rows) / vs, sum(num(r[VAL]) for r in o_rows) / os_
-            if min(vs, os_) >= MIN and abs(vid_roas - oth_roas) / max(vid_roas, oth_roas) >= 0.15:
+            if min(vs, os_) >= MIN and max(vid_roas, oth_roas) > 0 and abs(vid_roas - oth_roas) / max(vid_roas, oth_roas) >= 0.15:
                 better = 'Відео' if vid_roas > oth_roas else 'Інші формати'
                 F('ІНСАЙТ', f'{better} працюють краще: ROAS {max(vid_roas, oth_roas):.2f} проти {min(vid_roas, oth_roas):.2f}', 'Формат визначено за початком назви оголошення (налаштовується в config.json), це припущення.', None,
                   f'Збільшити частку формату «{better.lower()}» у нових креативах', 'вищий ROAS нових оголошень', '2 тижні')

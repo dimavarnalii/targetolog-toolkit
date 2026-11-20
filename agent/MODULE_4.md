@@ -13,20 +13,20 @@
 - 4-audit/SKILL.md (повний процес), 4-audit/README.md (файли, правила, межі).
 
 ## ASK_USER (по одному)
-- Назва клієнта, період, адреса сайту, маржа клієнта до реклами (без маржі прибутковість не оцінюємо), чи потрібне знеособлення.
-- Режим даних: А (токен у META_TOKEN, ти його не бачиш) або Б (експорти CSV з Ads Manager).
+- Питай по одному: режим даних (А: токен у META_TOKEN, ти його не бачиш; Б: експорти CSV з Ads Manager, які в користувача вже є), потім назва клієнта, період, адреса сайту, маржа клієнта до реклами (без маржі прибутковість не оцінюємо), чи потрібне знеособлення.
+- Аудит заточений під інтернет-магазини (покупки, ROAS). Для лідгену чи повідомлень запитай, чи ок: покупок буде 0, ROAS не показовий.
 
 ## STEPS
-- 0) pip install -r 4-audit/requirements.txt (python-docx, matplotlib). Створи config.json з config.example.json.
+- 0) За згодою користувача (бажано у venv): pip install -r 4-audit/requirements.txt (python-docx, matplotlib). config.json і data/ тримай поза папкою набору, скрипти викликай за повним шляхом. Windows: задай PYTHONUTF8=1. Перевірка без мережі: fetch_meta.py --config config.json --self-test.
 - A) python 4-audit/fetch_meta.py --config config.json   (потрібен META_TOKEN у середовищі)
-- Б) Ads Manager (мова English): період через кнопку дат (Custom, MM/DD/YYYY, Update), Export, Export as .csv для campaigns, adsets, ads, placement, agegender. Файли в data/. Кожне завантаження лише за згодою користувача.
+- Б) Якщо CSV вже є: поклади в data/ як campaigns, adsets, ads, placement, agegender .csv (обов'язковий лише campaigns). Інакше Ads Manager (English): Custom, MM/DD/YYYY, Update, Export as .csv. Потрібні стовпці: Amount spent (XXX), Purchases, Purchases conversion value, Impressions, Link clicks, CTR (link click-through rate), Frequency, Quality ranking, Conversion rate ranking, Landing page views, Adds to cart, Checkouts initiated, Campaign delivery, Ad delivery; для розбивок Platform, Placement, Age, Gender. Бракує: додай у колонки експорту. Валюта береться із заголовка Amount spent.
 - Не читай таблицю зі сторінки (вона віртуалізована) і не експортуй зведені звіти з кількома кабінетами: туди потраплять чужі клієнти.
-- Сайт: python 4-audit/site_check.py --config config.json (потрібен PSI_API_KEY; без нього часто 429). Інакше заміри в браузері в data/site.json.
+- Сайт: python 4-audit/site_check.py --config config.json (PSI_API_KEY теж лише змінною середовища, не в чат; без нього часто 429). Інакше заміри в браузері в data/site.json. Без цього кроку розділу про сайт у звіті не буде.
 - python 4-audit/run_audit.py --config config.json --skip-fetch --skip-site   → папка work/ і Word-файл.
 
 ## VERIFY
 - Відкрий work/report.json: кожна знахідка спирається на цифру. Суми витрат у кампаніях, оголошеннях і плейсментах збігаються.
-- Тип аудиторії й формат визначаються за назвами: перевір шаблони в config.json. Покажи користувачу три головні знахідки й що не перевірено.
+- Тип аудиторії й формат визначаються за назвами: перевір шаблони в config.json. Суми по плейсментах і віку з сумою кампаній звір вручну: інструмент не попередить. Покажи користувачу три головні знахідки й що не перевірено.
 
 ## NEVER
 - Не твердь прибутковість без маржі. Не публікуй документ із реальними назвами клієнта. Не змінюй кабінет. Не проси токен.

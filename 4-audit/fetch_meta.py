@@ -27,13 +27,12 @@ class Api:
     def _open(self, url):
         if self.fetcher:
             return self.fetcher(url)
-        req = urllib.request.Request(url, headers={'User-Agent': 'audit-kit/1.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'toolkit-audit/1.0', 'Authorization': 'Bearer ' + self.token})  # токен у заголовку, не в адресі
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.loads(r.read().decode('utf-8'))
 
     def get(self, path, params):
         q = dict(params)
-        q['access_token'] = self.token
         url = f'{self.base}/{path}?' + urllib.parse.urlencode(q)
         out = []
         while url:
@@ -54,6 +53,8 @@ class Api:
                 raise SystemExit('Забагато невдалих спроб')
             out.extend(data.get('data', []))
             url = data.get('paging', {}).get('next')
+            if url and urllib.parse.urlparse(url).hostname != 'graph.facebook.com':
+                raise SystemExit('Відповідь API вказала інший хост у paging.next: зупиняюсь.')
         return out
 
 
@@ -72,9 +73,9 @@ def metrics_row(r, cfg):
     pur = action(r.get('actions'), pa) or action(r.get('actions'), 'omni_purchase')
     val = action(r.get('action_values'), pa) or action(r.get('action_values'), 'omni_purchase')
     return {
-        'Amount spent (USD)': round(spend, 2), 'Purchases conversion value': round(val, 2), 'Purchases': pur,
+        f"Amount spent ({cfg.get('currency', 'USD')})": round(spend, 2), 'Purchases conversion value': round(val, 2), 'Purchases': pur,
         'Impressions': imps, 'Reach': r.get('reach', 0), 'Frequency': r.get('frequency', 0),
-        'CPM (cost per 1,000 impressions) (USD)': r.get('cpm', 0), 'Link clicks': clicks,
+        f"CPM (cost per 1,000 impressions) ({cfg.get('currency', 'USD')})": r.get('cpm', 0), 'Link clicks': clicks,
         'CTR (link click-through rate)': r.get('inline_link_click_ctr', 0),
         'Landing page views': action(r.get('actions'), 'landing_page_view'),
         'Adds to cart': action(r.get('actions'), 'add_to_cart'),

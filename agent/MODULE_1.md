@@ -25,20 +25,21 @@
 
 ## BUILD 1: збір даних
 - config.example.json скопіюй у config.json і заповни з відповідей. Перевір логіку: python 1-dashboard/fetch_facts.py --self-test.
-- Перший запуск на одному кабінеті: python 1-dashboard/fetch_facts.py --config config.json --days 30 --out out. Порівняй spend за вчора з Ads Manager.
-- Якщо результат не той, що вважає користувач, задай result_action у config.json (наприклад onsite_conversion.lead_grouped). Лише потім додавай решту кабінетів.
+- config.json і out/ тримай поза папкою набору. Перший запуск на одному кабінеті: python -I <TOOLKIT>/1-dashboard/fetch_facts.py --config config.json --only "Назва" --days 30 --out out. Порівняй spend за вчора з Ads Manager. Дашборд рахує в USD: для іншої валюти скрипт попередить, пороги в page.html доведеться перерахувати.
+- Якщо результат не той, що вважає користувач, задай result_action у config.json (наприклад onsite_conversion.lead_grouped; для message дефолт не перевірений). Лише потім додавай решту кабінетів.
+- META_TOKEN має бути видимий і запланованому завданню: користувач задає його постійною змінною середовища (Windows: setx) і перезапускає застосунок. Значення в чат не просити.
 
 ## BUILD 2: артефакт
 - Artifact quickstart (intent other): створи з типу Dashboard, прочитай його настанови до кінця.
-- Набори даних (id важливі): facts, projects, clients як file (json) з файлів out/; report_items порожній масив. Сторінка: 1-dashboard/page.html стає files/index.html.
+- Набори даних (id важливі): facts, projects, clients як file (json) з файлів out/; report_items як file, порожній масив. Сторінка: 1-dashboard/page.html стає files/index.html. Як замінювати файл набору, дивись у настановах типу.
 - Перевір інструментами типу (check, runs, page): жоден набір не в помилці, на сторінці цифри, а не прочерки. Артефакт лишається приватним.
 
 ## BUILD 3: оновлення й звіти
 - Заплановане завдання щодня зранку: fetch_facts.py --days 60 і повна заміна файлів наборів (ідемпотентно, без дублів).
-- Заплановані завдання звітів (день і тиждень): читають facts, застосовують STATUS_RULES, пишуть у report_items рядки {report, kind: headline|verdict|scale|watch|pause, order, project, ad, text, metric}.
+- Заплановані завдання звітів: день щодня 11:45 і тиждень щопонеділка 12:00 за Києвом (так написано на сторінці). Читають facts, застосовують STATUS_RULES і замінюють файл report_items: рядки {report: daily|weekly, kind: headline|verdict|scale|watch|pause, order (число), project (точна назва), ad (жирний заголовок), text, metric}. headline і verdict по одному на звіт; зелений стан лише якщо verdict.text дорівнює "Усе в нормі".
 - Пропущений день сам не надолужується: нагадай користувачу дивитись журнал запусків раз на тиждень.
 
-## STATUS_RULES (пороги винеси в конфіг)
+## STATUS_RULES (пороги задані константами в page.html: зміниш їх там)
 - Працюють за період від 7 днів і ціною результату (CPR).
 - Вигорає: CPR за останні 3 дні гірша за CPR періоду більш ніж на 1/3, або є витрати без результатів.
 - Росте / Погіршується: CPR змінилась на 15% і більше проти такого ж попереднього періоду.
@@ -46,6 +47,6 @@
 
 ## KNOWN_LIMITS
 - Meta міняла вікна атрибуції в Insights API (7d_view і 28d_view прибрані, за даними на 2026-01-12): звір з поточною документацією.
-- Не більше 90 днів за запуск. LTV і MRR у Meta немає: monthly_fee і monthly_budget користувач задає в config.json.
+- Не більше 90 днів за запуск; дані включають неповний сьогоднішній день, звіти беруть вчора. LTV і MRR у Meta немає: monthly_fee і monthly_budget задає користувач; status клієнта має бути active, інакше він вважається на паузі.
 - Не перевірено на реальних даних автора. Скриншоти в PDF з вигаданих проєктів.
 

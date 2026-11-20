@@ -138,9 +138,9 @@
         <button type="button" data-range="custom" aria-pressed="false">Свій період</button>
       </div>
       <div class="md-dates" id="custom-dates" hidden>
-        <input type="date" id="rg-from" min="2026-10-22" max="2026-11-18" aria-label="З дати">
+        <input type="date" id="rg-from" aria-label="З дати">
         <span class="md-sub">—</span>
-        <input type="date" id="rg-to" min="2026-10-22" max="2026-11-18" aria-label="По дату">
+        <input type="date" id="rg-to" aria-label="По дату">
       </div>
       <span class="md-rangelabel" data-draw="range_label"></span>
     </div>
@@ -895,6 +895,8 @@
     document.querySelectorAll('#period button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.range === preset)));
     const cd = document.getElementById('custom-dates');
     if (cd) cd.hidden = preset !== 'custom';
+    if (r && from) { from.min = r.min; from.max = r.max; }
+    if (r && to) { to.min = r.min; to.max = r.max; }
     if (r && from && from !== document.activeElement) from.value = r.s;
     if (r && to && to !== document.activeElement) to.value = r.e;
   });

@@ -13,6 +13,8 @@ step = float(sys.argv[2]) if len(sys.argv) > 2 else 2.0
 wf = P / f"{n}.words_m.json"
 if not wf.exists():
     wf = P / f"{n}.words.json"
+if not wf.exists():
+    raise SystemExit(f"Немає транскрипту {n}.words_m.json. Спершу запустіть transcribe_medium.py для цього файлу.")
 d = json.loads(wf.read_text(encoding="utf-8"))
 line, prev = "", 0
 for w in d["words"]:

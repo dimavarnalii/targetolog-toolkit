@@ -304,6 +304,10 @@ def main():
     names = [n for n in sys.argv[2:] if not n.startswith("--")]
     if names == ["all"]:
         names = [c["name"] for c in allcfg["creatives"]]
+    known = [c["name"] for c in allcfg["creatives"]]
+    bad = [n for n in names if n not in known]
+    if bad or not names:
+        sys.exit(f"Невідомі назви креативів: {bad or '(жодної не вказано)'}. Є в creatives.json: {known}")
     (PROJ / "work").mkdir(exist_ok=True)
     outdir = vm.DONE / date.today().isoformat() / vm.BRAND
     outdir.mkdir(parents=True, exist_ok=True)
