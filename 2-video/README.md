@@ -14,7 +14,7 @@ scripts/                    спільні скрипти
   repeats.py                  перевірка дублів тексту (звук і стики субтитрів)
   cut_phrase.py               вирізати фразу з готового ролика (межі по зміні кадру)
   burn_subs.py                субтитри на готове відео
-  fetch_stock.py              пошук/завантаження перебивок зі стоків Pexels/Pixabay (офіційні API, ваш ключ)
+  fetch_stock.py              додати кадр зі стоку (Mixkit/Pexels/Pixabay) за прямим посиланням, без ключів; з ключем ще пошук через API
   verify_video.py             перевірка файлу на «чорний екран» (moov, fps, SAR, піксельний формат, декод)
   scan_sheet.py               кадри з координатною сіткою (для кропів у шортсах)
   yt_fetch.py / shorts.py / render_project.py / build_dynamic_ass.py / build_overlay_filter.py /

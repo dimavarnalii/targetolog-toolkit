@@ -30,7 +30,8 @@ function doPost(e) {
     var ids = sh.getRange(2, col, sh.getLastRow() - 1, 1).getValues().join(',');
     if (ids.indexOf(id) !== -1) return ok_();
   }
-  sh.appendRow(COLS.map(function (c) { return p[c] || ''; }));
+  // значення з публічної форми: не дати Google Таблиці виконати їх як формулу (=, +, -, @ на початку)
+  sh.appendRow(COLS.map(function (c) { var v = String(p[c] || ''); return /^[=+\-@]/.test(v) ? "'" + v : v; }));
   notify_(p);
   return ok_();
 }

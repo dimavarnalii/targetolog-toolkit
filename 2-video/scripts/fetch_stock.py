@@ -26,6 +26,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -114,6 +115,10 @@ def download(url, dest):
     req = urllib.request.Request(url, headers=UA)
     part = dest.with_suffix(dest.suffix + ".part")
     with urllib.request.urlopen(req, timeout=300) as r, open(part, "wb") as f:
+        if not host_ok(r.geturl()):   # редирект на інший хост: зупиняємось
+            f.close()
+            part.unlink(missing_ok=True)
+            sys.exit(f"Відмова: редирект на недозволену адресу: {r.geturl()[:90]}")
         while True:
             b = r.read(1 << 20)
             if not b:
@@ -232,6 +237,17 @@ def self_test():
             raise AssertionError("мало відмовити: " + bad)
         except SystemExit:
             pass
+    # успішний шлях add з підміною download (без мережі)
+    global download
+    real, calls = download, []
+    download = lambda u, d: (calls.append(str(d)), d.write_bytes(b"x"))[0]
+    old_lib = vm.LIBRARY
+    vm.LIBRARY = Path(tempfile.mkdtemp())
+    try:
+        e = add_one("mixkit", "https://assets.mixkit.co/videos/preview/mixkit-test-1.mp4", "https://mixkit.co/x", "A", True)
+        assert e["file"] == "stock/mixkit_mixkit-test-1.mp4" and e["kind"] == "video" and calls, e
+    finally:
+        download, vm.LIBRARY = real, old_lib
     print("self-test ok")
 
 

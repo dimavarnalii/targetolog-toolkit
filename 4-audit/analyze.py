@@ -24,6 +24,7 @@ def agg(rows, keyf):
     return d
 
 
+SYM = '$'     # символ валюти (з заголовка «Amount spent (XXX)»)
 M = 'roas'   # 'roas' для продажів із цінністю покупок; інакше 'cpr' (ціна результату)
 def roas_of(a):
     # «ефективність»: чим більше, тим краще. ROAS у продажах, результатів на одиницю витрат в інших цілях
@@ -32,9 +33,21 @@ def roas_of(a):
 EN = lambda: 'ROAS' if M == 'roas' else 'ціна результату'
 def EV(x):
     if M == 'roas': return f'{x:.2f}'
-    return f'${1 / x:,.2f}' if x else 'немає результатів'
+    return f'{SYM}{1 / x:,.2f}' if x else 'немає результатів'
 cpa_of = lambda a: a['sp'] / a['pur'] if a['pur'] else None
 ctr_of = lambda a: a['clk'] / a['imp'] * 100 if a['imp'] else 0.0
+
+
+OBJ_NORM = {'SALES': 'SALES', 'CONVERSIONS': 'SALES', 'LEADS': 'LEADS', 'LEAD_GENERATION': 'LEADS', 'ENGAGEMENT': 'ENGAGEMENT',
+            'MESSAGES': 'ENGAGEMENT', 'TRAFFIC': 'TRAFFIC', 'LINK_CLICKS': 'TRAFFIC', 'AWARENESS': 'AWARENESS', 'REACH': 'AWARENESS',
+            'APP_PROMOTION': 'APP', 'APP_INSTALLS': 'APP', 'APP': 'APP'}
+
+
+def norm_obj(v):
+    """Мета кампанії в одному вигляді: «Leads», «OUTCOME_LEADS», «leads» -> LEADS."""
+    k = re.sub(r'[\s-]+', '_', str(v or '').strip().upper())
+    k = k[len('OUTCOME_'):] if k.startswith('OUTCOME_') else k
+    return OBJ_NORM.get(k, k)
 
 
 def analyze(cfg):
@@ -43,11 +56,11 @@ def analyze(cfg):
     if not camp:
         sys.exit(f'Немає {D}\\campaigns.csv. Покладіть експорт кампаній (Ads Manager) або запустіть fetch_meta.py.')
     # валюта береться із заголовка стовпця витрат: «Amount spent (UAH)» і т. д.
-    global SP
+    global SP, SYM
     for h in camp[0]:
         m = re.fullmatch(r'Amount spent \((\w{3})\)', h.strip())
         if m:
-            SP = h; cfg['currency'] = m.group(1); break
+            SP = h; cfg['currency'] = m.group(1); SYM = '$' if m.group(1) == 'USD' else m.group(1) + ' '; break
     else:
         sys.exit('У файлі кампаній немає стовпця «Amount spent (XXX)». Додайте його в колонки експорту.')
     adsets = read_csv(os.path.join(D, 'adsets.csv')); ads = read_csv(os.path.join(D, 'ads.csv'))
@@ -55,6 +68,10 @@ def analyze(cfg):
     daily = read_csv(os.path.join(D, 'daily.csv'))
     # результат: стовпець «Results» (є в експорті Ads Manager і в нашому fetch_meta), інакше покупки
     global PUR, M
+    for rows_ in (camp, adsets, ads, pl_rows, ag_rows, daily):
+        for r_ in rows_:
+            if 'Objective' in r_:
+                r_['Objective'] = norm_obj(r_['Objective'])
     PUR = 'Results' if 'Results' in camp[0] else 'Purchases'
     # мета кампаній: аналіз ведемо по головній за витратами цілі, решту показуємо окремо (результати різних цілей не порівнюють)
     camp_all = camp; focus = ''; other_obj = []
@@ -62,7 +79,9 @@ def analyze(cfg):
         fsp = collections.Counter()
         for r in camp: fsp[r.get('Objective', '')] += num(r.get(SP))
         real = {k: v for k, v in fsp.items() if k and v > 0}
-        focus = cfg.get('objective_focus') or (max(real, key=real.get) if real else '')
+        focus = norm_obj(cfg.get('objective_focus')) if cfg.get('objective_focus') not in (None, '', 'auto') else ''
+        if focus and focus not in real:
+            sys.exit(f'objective_focus {focus!r} немає серед цілей у даних: {sorted(real)}')
         if cfg.get('objective_focus') in (None, '', 'auto'):
             focus = max(real, key=real.get) if real else ''
         keep = lambda rs: [r for r in rs if r.get('Objective', '') == focus or num(r.get(SP)) == 0]
@@ -74,6 +93,8 @@ def analyze(cfg):
         camp, adsets, ads, pl_rows, ag_rows, daily = keep(camp), keep(adsets), keep(ads), keep(pl_rows), keep(ag_rows), keep(daily)
     val_tot = sum(num(r.get(VAL)) for r in camp)
     M = 'roas' if (focus in ('SALES', '') and val_tot > 0) else 'cpr'
+    if M != 'roas' and sum(num(r.get(PUR)) for r in camp) == 0:
+        sys.exit('У файлі кампаній немає результатів: додайте в колонки експорту «Results» (і «Objective» для кількох цілей) або «Purchases».')
     RL = LABEL.get(focus, 'Покупки' if M == 'roas' else 'Результати')
     mixed_types = []
     if M != 'roas' and 'Result type' in camp[0]:  # назва результату: домінуючий тип за витратами, якщо його частка від 70%
@@ -91,7 +112,7 @@ def analyze(cfg):
     act = sorted([r for r in camp if num(r.get(SP)) > 0], key=lambda r: -num(r.get(SP)))
     if not act:
         sys.exit('У файлі кампаній немає жодної з витратами за період.')
-    spend = sum(num(r[SP]) for r in act); val = sum(num(r[VAL]) for r in act); pur = sum(num(r[PUR]) for r in act)
+    spend = sum(num(r[SP]) for r in act); val = sum(num(r.get(VAL)) for r in act); pur = sum(num(r.get(PUR)) for r in act)
     imp = sum(num(r.get('Impressions')) for r in act); clk = sum(num(r.get('Link clicks')) for r in act)
     roas = roas_of({'sp': spend, 'val': val, 'pur': pur}); n_all = len(camp_all); zero = n_all - sum(1 for r in camp_all if num(r.get(SP)) > 0)
     period = f"{camp[0].get('Reporting starts', cfg.get('period_start', ''))} — {camp[0].get('Reporting ends', cfg.get('period_end', ''))}"
@@ -109,7 +130,7 @@ def analyze(cfg):
     # ---- таблиця кампаній
     camp_t = []
     for r in act:
-        a = {'sp': num(r[SP]), 'val': num(r[VAL]), 'pur': num(r[PUR])}
+        a = {'sp': num(r[SP]), 'val': num(r.get(VAL)), 'pur': num(r.get(PUR))}
         camp_t.append({'name': cname[r['Campaign name']], 'state': 'активна' if r.get('Campaign delivery', '').lower() in ('active', 'ACTIVE'.lower()) else 'вимкнена',
                        'spend': a['sp'], 'pur': a['pur'], 'cpa': cpa_of(a), 'roas': roas_of(a), 'freq': num(r.get('Frequency')), 'ctr': num(r.get('CTR (link click-through rate)'))})
     top = camp_t[0]; top_share = top['spend'] / spend * 100
@@ -144,18 +165,18 @@ def analyze(cfg):
             if k in by and o:
                 x = by[k]
                 if x['spend'] < MIN:
-                    F('ІНСАЙТ', f'{k}: даних замало (${x["spend"]:,.0f})', f'{EN()} {EV(x["roas"])} проти {EV(o["roas"])} в інших, але витрати нижчі за поріг ${MIN}: висновку немає.', 'Тип аудиторії визначено за назвами груп оголошень.', f'Не масштабувати {k} до ${MIN * 4:,.0f}+ витрат', 'не палити бюджет на малій вибірці', 'постійно')
+                    F('ІНСАЙТ', f'{k}: даних замало ({SYM}{x["spend"]:,.0f})', f'{EN()} {EV(x["roas"])} проти {EV(o["roas"])} в інших, але витрати нижчі за поріг {SYM}{MIN}: висновку немає.', 'Тип аудиторії визначено за назвами груп оголошень.', f'Не масштабувати {k} до {SYM}{MIN * 4:,.0f}+ витрат', 'не палити бюджет на малій вибірці', 'постійно')
                 elif x['roas'] < o['roas'] * 0.75:
-                    F('ІНСАЙТ', f'{k} слабший за інші: {EN()} {EV(x["roas"])} проти {EV(o["roas"])}', f'На {k} пішло ${x["spend"]:,.0f}.', 'Тип аудиторії визначено за назвами груп оголошень.', f'Перерозподілити бюджет із {k} на кращі групи', EFFT, '2 тижні')
+                    F('ІНСАЙТ', f'{k} слабший за інші: {EN()} {EV(x["roas"])} проти {EV(o["roas"])}', f'На {k} пішло {SYM}{x["spend"]:,.0f}.', 'Тип аудиторії визначено за назвами груп оголошень.', f'Перерозподілити бюджет із {k} на кращі групи', EFFT, '2 тижні')
                 elif x['roas'] > o['roas'] * 1.25:
-                    F('МОЖЛИВІСТЬ', f'{k} сильніший за інші: {EN()} {EV(x["roas"])} проти {EV(o["roas"])}', f'Витрати ${x["spend"]:,.0f}. Є сенс обережно збільшити частку.', 'Тип аудиторії визначено за назвами груп оголошень.')
+                    F('МОЖЛИВІСТЬ', f'{k} сильніший за інші: {EN()} {EV(x["roas"])} проти {EV(o["roas"])}', f'Витрати {SYM}{x["spend"]:,.0f}. Є сенс обережно збільшити частку.', 'Тип аудиторії визначено за назвами груп оголошень.')
 
     # ---- оголошення
     ads_t = []; vid_roas = oth_roas = None; top2ads = 0
     ads_act = sorted([r for r in ads if num(r.get(SP)) >= 5], key=lambda r: -num(r[SP]))
     if ads_act:
         for i, r in enumerate(ads_act, 1):
-            s_, v_, p_ = num(r[SP]), num(r[VAL]), num(r[PUR])
+            s_, v_, p_ = num(r[SP]), num(r.get(VAL)), num(r.get(PUR))
             rk = lambda k: RANKS.get((r.get(k) or '').split(' - ')[0].strip(), '—')
             ads_t.append({'name': nm('a', i, r.get('Ad name', '')), 'state': 'активне' if (r.get('Ad delivery') or '').lower() == 'active' else 'вимкнене', 'spend': s_, 'pur': p_, 'roas': roas_of({'sp': s_, 'val': v_, 'pur': p_}), 'freq': num(r.get('Frequency')),
                           'quality': rk('Quality ranking'), 'conv': rk('Conversion rate ranking')})
@@ -165,8 +186,8 @@ def analyze(cfg):
         v_rows = [r for r in ads_act if isv(r)]; o_rows = [r for r in ads_act if not isv(r)]
         if v_rows and o_rows:
             vs, os_ = sum(num(r[SP]) for r in v_rows), sum(num(r[SP]) for r in o_rows)
-            vid_roas = roas_of({'sp': vs, 'val': sum(num(r[VAL]) for r in v_rows), 'pur': sum(num(r[PUR]) for r in v_rows)})
-            oth_roas = roas_of({'sp': os_, 'val': sum(num(r[VAL]) for r in o_rows), 'pur': sum(num(r[PUR]) for r in o_rows)})
+            vid_roas = roas_of({'sp': vs, 'val': sum(num(r.get(VAL)) for r in v_rows), 'pur': sum(num(r.get(PUR)) for r in v_rows)})
+            oth_roas = roas_of({'sp': os_, 'val': sum(num(r.get(VAL)) for r in o_rows), 'pur': sum(num(r.get(PUR)) for r in o_rows)})
             if min(vs, os_) >= MIN and max(vid_roas, oth_roas) > 0 and abs(vid_roas - oth_roas) / max(vid_roas, oth_roas) >= 0.15:
                 better = 'Відео' if vid_roas > oth_roas else 'Інші формати'
                 F('ІНСАЙТ', f'{better} працюють краще: {EN()} {EV(max(vid_roas, oth_roas))} проти {EV(min(vid_roas, oth_roas))}', 'Формат визначено за початком назви оголошення (налаштовується в config.json), це припущення.', None,
@@ -192,11 +213,11 @@ def analyze(cfg):
         for p in pl_t:
             if p['spend'] >= max(MIN, spend * 0.05) and p['roas'] < roas * cfg['placement_bad_roas_ratio']:
                 ref = min((q['cpa'] for q in best if q is not p and q['cpa']), default=None)
-                F('КРИТИЧНО', f'{p["name"]}: {EN()} {EV(p["roas"])}' + (f' і {CPAL} ${p["cpa"]:.2f}' if p['cpa'] and M == 'roas' else ''),
-                  f'Плейсмент отримав ${p["spend"]:,.0f} ({p["share"]:.0f}% бюджету) при показнику ({EN()}) значно гіршому за середній {EV(roas)}.' + (f' У найкращих плейсментах {CPAL} від ${ref:.2f}.' if ref else ''),
+                F('КРИТИЧНО', f'{p["name"]}: {EN()} {EV(p["roas"])}' + (f' і {CPAL} {SYM}{p["cpa"]:.2f}' if p['cpa'] and M == 'roas' else ''),
+                  f'Плейсмент отримав {SYM}{p["spend"]:,.0f} ({p["share"]:.0f}% бюджету) при показнику ({EN()}) значно гіршому за середній {EV(roas)}.' + (f' У найкращих плейсментах {CPAL} від {SYM}{ref:.2f}.' if ref else ''),
                   'Розріз за плейсментами. Вибірка достатня для рішення «зменшити», не для «вимкнути назавжди».', f'Зменшити бюджет {p["name"]}, перенести на кращі плейсменти', CPAL.replace('ціна','нижча ціна'), 'цього тижня')
             elif p['spend'] < max(MIN, spend * 0.05) and p['spend'] >= 10 and p['roas'] >= roas * 1.5 and p['pur'] >= 3:
-                F('МОЖЛИВІСТЬ', f'{p["name"]}: {EN()} {EV(p["roas"])} на малому бюджеті', f'Витрати лише ${p["spend"]:,.0f}, тож це напрям для тесту, а не висновок.')
+                F('МОЖЛИВІСТЬ', f'{p["name"]}: {EN()} {EV(p["roas"])} на малому бюджеті', f'Витрати лише {SYM}{p["spend"]:,.0f}, тож це напрям для тесту, а не висновок.')
 
     # ---- вік і стать
     ag_t = []; fem = None
@@ -223,14 +244,14 @@ def analyze(cfg):
             d1, d0 = set(days[-14:]), set(days[-28:-14])
             w1, w0 = [r for r in rows if r['Day'] in d1], [r for r in rows if r['Day'] in d0]
             def w(rs):
-                s = sum(num(r[SP]) for r in rs); v = sum(num(r[VAL]) for r in rs); p = sum(num(r[PUR]) for r in rs)
+                s = sum(num(r[SP]) for r in rs); v = sum(num(r.get(VAL)) for r in rs); p = sum(num(r.get(PUR)) for r in rs)
                 return {'sp': s, 'val': v, 'pur': p}
             a1, a0 = w(w1), w(w0)
             if a0['sp'] >= MIN and a1['sp'] >= MIN:
                 r1, r0 = roas_of(a1), roas_of(a0); ch = (r1 / r0 - 1) * 100 if r0 else 0
                 trend = {'roas_prev': r0, 'roas_last': r1, 'change_pct': ch, 'spend_prev': a0['sp'], 'spend_last': a1['sp']}
                 if ch <= -cfg['trend_warn_pct']:
-                    F('УВАГА', (f'ROAS просів на {abs(ch):.0f}%' if M == 'roas' else f'Ціна результату зросла на {abs(ch) / (1 + ch / 100):.0f}%') + ' за останні 14 днів', f'{EV(r0)} → {EV(r1)} (витрати ${a0["sp"]:,.0f} → ${a1["sp"]:,.0f}). Перевірте втому креативів і зміни в сайті чи ціні.', None, 'З\'ясувати причину погіршення результативності за останні 2 тижні', 'повернення результативності', 'цього тижня')
+                    F('УВАГА', (f'ROAS просів на {abs(ch):.0f}%' if M == 'roas' else f'Ціна результату зросла на {abs(ch) / (1 + ch / 100):.0f}%') + ' за останні 14 днів', f'{EV(r0)} → {EV(r1)} (витрати {SYM}{a0["sp"]:,.0f} → {SYM}{a1["sp"]:,.0f}). Перевірте втому креативів і зміни в сайті чи ціні.', None, 'З\'ясувати причину погіршення результативності за останні 2 тижні', 'повернення результативності', 'цього тижня')
                 elif ch >= cfg['trend_warn_pct']:
                     F('МОЖЛИВІСТЬ', (f'ROAS зріс на {ch:.0f}%' if M == 'roas' else f'Ціна результату знизилась на {ch / (1 + ch / 100):.0f}%') + ' за останні 14 днів', f'{EV(r0)} → {EV(r1)}. Є сенс перевірити, що саме спрацювало, і закріпити.')
 
@@ -308,7 +329,7 @@ def analyze(cfg):
     mix_note = ([f'У головній цілі змішані типи результату ({", ".join(mixed_types)}): їх складено разом, як у підсумку Ads Manager. Порівнюйте кампанії одного типу.'] if len(mixed_types) > 1 else [])
     limits = ['Дані: ' + ', '.join(n for n, ok in (('кампанії', True), ('групи', bool(adsets)), ('оголошення', bool(ads)), ('плейсменти', bool(pl_rows)), ('вік і стать', bool(ag_rows)), ('по днях', bool(daily))) if ok) + ' за один період.',
               'Атрибуція кабінету (вікно за замовчуванням) завищує або занижує результат порівняно з реальними продажами.',
-              f'Вибірки до ${MIN} не дають висновків.', *mix_note, 'Висновки це правила на цифрах: фінальне рішення за спеціалістом.']
+              f'Вибірки до {SYM}{MIN} не дають висновків.', *mix_note, 'Висновки це правила на цифрах: фінальне рішення за спеціалістом.']
     missing = [t for t, ok in (('Розріз по днях (тренд результативності, зростання частоти)', bool(daily)), ('Воронка (покази, кліки, перегляди сторінки, результати)', funnel is not None), ('Ретаргетинг проти холодної аудиторії (потрібні групи оголошень з типами в назвах)', bool(aud)), ('Звірка з Google Analytics чи CRM', False)) if not ok]
 
     return {'meta': {'client': cfg['client_name_anonymized'] if anon else cfg['client_name'], 'period': period, 'currency': cur, 'anonymized': anon, 'site_url': None if anon else (site or {}).get('url'), 'generated': datetime.date.today().isoformat()},

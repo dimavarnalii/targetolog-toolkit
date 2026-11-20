@@ -33,7 +33,7 @@ for f in sorted(p for p in SRC.iterdir() if p.suffix.lower() in exts):
         continue
     part = OUT / (f.stem + ".part.mp4")
     # autorotate -> 1080x1920, CFR 30, SAR 1, yuv420p, short GOP for accurate cuts
-    subprocess.run([vm.FFMPEG, "-y", "-v", "error", "-threads", "4", "-i", str(f), "-map", "0:v:0", "-map", "0:a:0",
+    subprocess.run([vm.FFMPEG, "-y", "-v", "error", "-threads", "4", "-i", str(f), "-map", "0:v:0", "-map", "0:a:0?",
                     "-vf", f"{dedup}scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,format=yuv420p",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-g", "15",
                     "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(part)], check=True)

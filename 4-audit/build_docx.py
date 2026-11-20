@@ -126,7 +126,8 @@ def build(cfg):
         p.add_run().add_picture(path, width=Cm(w)); para(cap, size=8.5, color=MUT, after=8, align=WD_ALIGN_PARAGRAPH.CENTER)
     fig = [0]
     def figcap(t): fig[0] += 1; return f'Рис. {fig[0]}. {t}'
-    cf = lambda v: ('B91C1C' if float(v) < 1.0 else 'B45309' if float(v) < 1.8 else '047857')
+    cf = (lambda v: ('B91C1C' if float(v) < 1.0 else 'B45309' if float(v) < 1.8 else '047857')) if isr else \
+         (lambda v: ('047857' if float(v) >= roas * 1.15 else 'B45309' if float(v) >= roas * .85 else 'B91C1C'))
 
     # footer
     fp = s0.footer.paragraphs[0]; run(fp, f'Аудит рекламного кабінету · {M["client"]} · {M["period"]}', size=8, color=MUT)
@@ -156,7 +157,7 @@ def build(cfg):
         kpi_row([('Витрати', f'{sym}{K["spend"]:,.0f}', M['period'], 'F59E0B'), ('Покупки', f'{K["purchases"]:,.0f}', f'ціна покупки {sym}{K["cpa"]:.2f}' if K['cpa'] else '', '0EA5E9'),
                  ('Цінність покупок', f'{sym}{K["value"]:,.0f}', 'за даними пікселя', '10B981'), ('ROAS', f'{roas:.2f}', 'цінність покупок / витрати', '8B5CF6')])
     else:
-        kpi_row([('Витрати', f'{sym}{K["spend"]:,.0f}', M['period'], 'F59E0B'), (RL, f'{K["purchases"]:,.0f}', 'за метою кампаній', '0EA5E9'),
+        kpi_row([('Витрати', f'{sym}{K["spend"]:,.0f}', M['period'] + (' · лише головна ціль' if K.get('other_objectives') else ''), 'F59E0B'), (RL, f'{K["purchases"]:,.0f}', 'за метою кампаній', '0EA5E9'),
                  ('Ціна результату', f'{sym}{K["cpa"]:.2f}' if K['cpa'] else '—', 'витрати / результати', '8B5CF6'), ('Мета аналізу', RL, 'головна за витратами', '10B981')])
     kpi_row([('CPM', f'{sym}{K["cpm"]:.2f}', 'ціна 1000 показів', '0EA5E9'), ('CTR за посиланням', f'{K["ctr"]:.2f}%', 'кліки / покази', '10B981'),
              ('Частота головної', f'{K["top_freq"]:.1f}', 'накопичена за період', 'EF4444'), ('Порожніх кампаній', f'{K["zero"]} з {K["n_all"]}', 'без витрат за період', 'F59E0B')])

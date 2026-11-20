@@ -261,7 +261,8 @@ PIXEL = """!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMet
 JS_COMMON = r"""
 (function(){
 var P=__CFG__;
-function uid(){try{var k=sessionStorage.getItem('eid');if(!k){k=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2));sessionStorage.setItem('eid',k)}return k}catch(e){return String(Date.now())}}
+window.esc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')};
+function uid(){return crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2)}
 var Q=new URLSearchParams(location.search),U={};
 ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid','ad_id','adset_id','campaign_id','placement'].forEach(function(k){var v=Q.get(k);if(v){U[k]=v;try{sessionStorage.setItem('u_'+k,v)}catch(e){}}else{try{var s=sessionStorage.getItem('u_'+k);if(s)U[k]=s}catch(e){}}});
 function track(n,d){if(window.fbq)fbq('trackCustom',n,d||{})}
@@ -274,7 +275,7 @@ function send(fields,btn,err){
   var body=new URLSearchParams();for(var k in fields)body.append(k,fields[k]);
   for(var u in U)body.append(u,U[u]);
   body.append('event_id',eid);body.append('page',location.pathname);body.append('ts',new Date().toISOString());
-  var go=function(){location.href=P.thanks+'?eid='+encodeURIComponent(eid)};
+  var go=function(){location.href=P.thanks+(P.thanks.indexOf('?')<0?'?':'&')+'eid='+encodeURIComponent(eid)};
   if(!P.endpoint){console.log('DEMO lead',Object.fromEntries(body));setTimeout(go,300);return}
   var done=false,t=setTimeout(function(){if(!done){done=true;go()}},4000);
   fetch(P.endpoint,{method:'POST',mode:'no-cors',body:body}).then(function(){if(!done){done=true;clearTimeout(t);go()}}).catch(function(){btn.disabled=false;err.textContent='Не вдалося надіслати. Спробуйте ще раз або зателефонуйте.'});
@@ -296,8 +297,8 @@ function step(){
   box.style.animation='none';box.offsetHeight;box.style.animation='';
   if(i>=n)return contact();
   set(Math.round(i/(n+1)*100),'Питання '+(i+1)+' з '+n);
-  var q=Z[i],h='<h2>'+q.q+'</h2><div class="opts'+(q.options.length<=4&&q.options.every(function(o){return o.length<28})?' two':'')+'">';
-  q.options.forEach(function(o,k){h+='<button type="button" class="opt" data-k="'+k+'"><span class="l">'+L.charAt(k)+'</span><span>'+o+'</span></button>'});
+  var q=Z[i],h='<h2>'+esc(q.q)+'</h2><div class="opts'+(q.options.length<=4&&q.options.every(function(o){return o.length<28})?' two':'')+'">';
+  q.options.forEach(function(o,k){h+='<button type="button" class="opt" data-k="'+k+'"><span class="l">'+L.charAt(k)+'</span><span>'+esc(o)+'</span></button>'});
   h+='</div>';if(i>0)h+='<button type="button" class="back">← Назад</button>';
   box.innerHTML=h;
   box.querySelectorAll('.opt').forEach(function(b){b.addEventListener('click',function(){
@@ -309,7 +310,7 @@ function step(){
 }
 function contact(){
   set(92,'Останній крок');
-  box.innerHTML='<div class="unlock">'+End.icon+'<span>'+End.unlock+'</span></div><h2>'+End.t+'</h2><p class="mut">'+End.d+'</p><form id="qf" class="lead" novalidate><div><label>Ім’я</label><input type="text" name="name" required autocomplete="given-name"></div><div><label>Телефон</label><input type="tel" name="phone" required autocomplete="tel" placeholder="0XX XXX XX XX" inputmode="tel"></div><input class="hp" type="text" name="website" tabindex="-1" autocomplete="off"><button class="btn wide" type="submit">'+End.b+'</button><div class="err"></div><div class="consent">'+End.c+'</div></form><button type="button" class="back">← Назад</button>';
+  box.innerHTML='<div class="unlock">'+End.icon+'<span>'+esc(End.unlock)+'</span></div><h2>'+esc(End.t)+'</h2><p class="mut">'+esc(End.d)+'</p><form id="qf" class="lead" novalidate><div><label>Ім’я</label><input type="text" name="name" required autocomplete="given-name"></div><div><label>Телефон</label><input type="tel" name="phone" required autocomplete="tel" placeholder="0XX XXX XX XX" inputmode="tel"></div><input class="hp" type="text" name="website" tabindex="-1" autocomplete="off"><button class="btn wide" type="submit">'+esc(End.b)+'</button><div class="err"></div><div class="consent">'+esc(End.c)+'</div></form><button type="button" class="back">← Назад</button>';
   box.querySelector('.back').addEventListener('click',function(){i--;step()});
   var f=box.querySelector('#qf');
   f.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(f).forEach(function(v,k){d[k]=v});
@@ -321,7 +322,7 @@ step();
 
 THANKS_JS = """(function(){var q=new URLSearchParams(location.search),eid=q.get('eid');
 __PIXEL__
-if(window.fbq){fbq('track','Lead',{},eid?{eventID:eid}:{})}
+if(window.fbq&&eid){var k='lead_'+eid,dup=false;try{dup=!!sessionStorage.getItem(k);if(!dup)sessionStorage.setItem(k,'1')}catch(e){}if(!dup){fbq('track','Lead',{},{eventID:eid})}}
 })();"""
 
 # ---------------------------------------------------------------- допоміжне
@@ -543,7 +544,7 @@ def build(b, out):
     fmt = b.get("format", "landing")
     cls = ("dark " if th["dark"] == "1" else "") + ("bold" if b.get("style") == "bold" else "")
     trk = b.get("tracking", {})
-    cfg = json.dumps({"endpoint": trk.get("endpoint", ""), "thanks": trk.get("thanks_url", "thanks.html")}, ensure_ascii=False)
+    cfg = json.dumps({"endpoint": trk.get("endpoint", ""), "thanks": trk.get("thanks_url", "thanks.html")}, ensure_ascii=False).replace("</", "<\\/")
     px = pixel_snippet(b)
     demo = '' if trk.get("endpoint") else '<div class="demo">ДЕМО-РЕЖИМ: заявки нікуди не відправляються (endpoint не задано)</div>'
     if fmt == "quiz":
@@ -551,8 +552,8 @@ def build(b, out):
         body = build_quiz(b)
         end = json.dumps({"t": z["end_title"], "d": z["end_text"], "b": b["form"]["button"], "c": b["form"]["consent"],
                           "unlock": z.get("unlock", "Останній крок: вкажіть контакти."),
-                          "icon": ic("gift")}, ensure_ascii=False)
-        qs = json.dumps([{"q": x["q"], "options": x["options"]} for x in z["questions"]], ensure_ascii=False)
+                          "icon": ic("gift")}, ensure_ascii=False).replace("</", "<\\/")
+        qs = json.dumps([{"q": x["q"], "options": x["options"]} for x in z["questions"]], ensure_ascii=False).replace("</", "<\\/")
         js = JS_COMMON.replace("__CFG__", cfg) + JS_QUIZ.replace("__QUIZ__", qs).replace("__END__", end)
         sticky = ""
         header = ""
@@ -605,7 +606,7 @@ def validate(b):
     else:
         for p in ["quiz.title", "quiz.intro", "quiz.questions", "quiz.end_title", "quiz.end_text"]:
             if not need(b, p): errs.append("порожнє поле: " + p)
-    blob = json.dumps(b, ensure_ascii=False)
+    blob = json.dumps(b, ensure_ascii=False).replace("</", "<\\/")
     if re.search(r"(\[\.\.\.\]|TODO|ЗАПОВНИ|lorem|Lorem|XXX)", blob):
         errs.append("у брифі лишились заглушки (TODO/XXX/...)")
     if fmt == "landing" and b.get("hero", {}).get("h1") and len(b["hero"]["h1"].replace("**", "")) > 90:

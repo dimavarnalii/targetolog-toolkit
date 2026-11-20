@@ -74,12 +74,25 @@ def check(cfg_path, name):
     speed = bc.pick_speed(cfg, len(ws), sum(e - s for s, e in segs))
     total = sum(e - s for s, e in segs) / speed
     errs, warns, wins = [], [], []
+    cat_path = vm.LIBRARY / "catalog.json"
+    cat = {}
+    if cat_path.exists():
+        raw = json.loads(cat_path.read_text(encoding="utf-8"))
+        cat = {Path(c["file"]).with_suffix("").as_posix(): c for c in (raw["clips"] if isinstance(raw, dict) else raw)}
     seen = set()
     for k, c in enumerate(cfg.get("cutaways", [])):
         p = bc.resolve_media(c["file"])
         if not p:
             errs.append(f"#{k} немає файлу: {c['file']}"); continue
         dur = c.get("dur", 1.6)
+        ent = cat.get(c["file"][4:]) if c["file"].startswith("lib/") else None
+        if ent:
+            if ent.get("sensitive"):
+                warns.append(f"#{k} {c['file']}: чутливий кадр ({ent.get('sensitive_reason') or 'без причини'}): став лише за дозволом користувача")
+            if ent.get("disabled"):
+                warns.append(f"#{k} {c['file']}: кадр вимкнено в каталозі")
+            if ent.get("lowres"):
+                warns.append(f"#{k} {c['file']}: мала роздільність (lowres)")
         if not bc.is_image(p) and c.get("ss", 0) + dur > bc.probe_dur(p):
             errs.append(f"#{k} {c['file']} закороткий для ss={c.get('ss', 0)} dur={dur}")
         if c["file"] in seen:

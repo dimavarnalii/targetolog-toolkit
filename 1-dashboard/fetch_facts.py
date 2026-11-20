@@ -1,7 +1,7 @@
 """Збір даних Meta Ads для дашборда-артефакта (токен лише ads_read).
 
 Робить те саме, що «Пульт аналітики»: бере щоденні дані рівня «оголошення» по кожному
-кліентському кабінету і пише їх у файли, які дашборд читає як набори даних:
+клієнтському кабінету і пише їх у файли, які дашборд читає як набори даних:
   out/facts.json     рядок = день x оголошення: date, project, campaign, adset, ad,
                      spend, impressions, clicks, results, revenue
   out/projects.json  проєкти й цілі (з config.json)
@@ -75,11 +75,11 @@ def http_get(url, fetcher=None, token=None):
                 time.sleep(5 * (attempt + 1))
                 continue
             raise SystemExit(f"Meta API відповіла {e.code}: {body}")
-        except urllib.error.URLError as e:
+        except (urllib.error.URLError, TimeoutError) as e:
             if attempt < 3:
                 time.sleep(3)
                 continue
-            raise SystemExit(f"Немає зв'язку з Meta API: {e.reason}")
+            raise SystemExit(f"Немає зв'язку з Meta API: {getattr(e, 'reason', e)}")
 
 
 def fetch_account(account_id, since, until, token, fetcher=None):
@@ -131,7 +131,7 @@ def to_fact(row, project, rtype, action, source="api"):
 
 
 def build(config, days, token, fetcher=None, today=None):
-    today = today or dt.date.today()
+    today = today or dt.date.today()   # локальна дата комп'ютера (часовий пояс кабінету не враховується, див. README)
     since = (today - dt.timedelta(days=days - 1)).isoformat()
     until = today.isoformat()
     facts, projects, clients = [], [], []
@@ -210,7 +210,7 @@ def main():
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--days", type=int, default=30)
     ap.add_argument("--out", default="out")
-    ap.add_argument("--only", help="узяти лише проєкт з такою назвою (для першої перевірки на одному кабінеті)")
+    ap.add_argument("--only", help="узяти лише проєкт з такою назвою (для першої перевірки; УВАГА: перезаписує out/ лише цим проєктом)")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:

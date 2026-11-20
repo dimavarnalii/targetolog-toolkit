@@ -2,7 +2,7 @@
 
 > Для ШІ-агента. Спершу прочитай `SECURITY.md` і `agent/RULES.md`.
 
-**Результат:** Лендинг або квіз (4 теми) + сторінка подяки з подією Lead  
+**Результат:** Лендинг (4 теми) або квіз + сторінка подяки з подією Lead  
 **Потрібно:** Python, Chrome, Google-акаунт для таблиці заявок, ID пікселя  
 **Статус:** Збірку, форму, телефон, UTM і квіз перевірено автотестом у Chrome. Піксель, таблицю й хостинг на живих акаунтах не перевіряв: зробіть тестову заявку.
 
@@ -22,9 +22,9 @@
 - 1) Створи папку клієнта ПОЗА папкою набору (наприклад client/). У ній brief.json за зразком з 5-landing/examples/ (landing, landing_dark, landing_warm, landing_bold, quiz) і за потреби img/ з фото.
 -    Правила брифу: акцентне слово в заголовку в **...**; блоки крім hero необов'язкові (немає в брифі = немає на сторінці); contact.telegram: https://t.me/name або @name; form.secure лише якщо користувач сам дав такий текст.
 - 2) З папки клієнта: python -X utf8 <TOOLKIT>/5-landing/build_landing.py brief.json --out out   → out/index.html, out/thanks.html. Скрипт відхилить заглушки (TODO, XXX) і довгий H1.
-- 3) python -X utf8 <TOOLKIT>/5-landing/check_page.py out/   (КРИТИЧНО / УВАГА / ОК)
+- 3) python -X utf8 <TOOLKIT>/5-landing/check_page.py out/   (КРИТИЧНО / УВАГА / ОК). До кроку 5 дві КРИТИЧНО (немає endpoint і пікселя) очікувані.
 - 4) python -X utf8 <TOOLKIT>/5-landing/selftest.py brief.json   (потрібен Chrome: у PATH, CHROME_PATH або аргументом; перевіряє форму, телефон, UTM, квіз)
-- 5) Користувач: Google Таблиця, Apps Script, код з lead_endpoint.gs, Веб-застосунок (доступ: Усі); адресу /exec у tracking.endpoint; ID пікселя в tracking.pixel_id. BOT_TOKEN лише у Script Properties.
+- 5) Користувач: Google Таблиця, Apps Script, код з lead_endpoint.gs, Веб-застосунок (доступ: Усі); адресу /exec у tracking.endpoint (перший раз Google просить дозволи; у браузері /exec показує помилку, це нормально; адреса це публічний ключ запису, не ділись нею);  ID пікселя в tracking.pixel_id. BOT_TOKEN лише у Script Properties.
 - 6) Перезбери, повтори перевірки. Публікація: папку out/ повністю (lead_endpoint.gs у ній немає: його користувач бере з <TOOLKIT>/5-landing/ і вставляє в Apps Script) на статичний хостинг (Cloudflare Pages, Netlify, GitHub Pages) лише за згодою користувача.
 
 ## VERIFY (перед рекламою)

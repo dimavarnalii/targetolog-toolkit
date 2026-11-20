@@ -8,7 +8,8 @@
   python library_catalog.py scan            знайти нові файли, додати в каталог, зробити контактні листи нових кадрів
   python library_catalog.py check           показати файли без опису (їх агент не бачить)
   python library_catalog.py describe <file> "що в кадрі і під які фрази підходить" [--sensitive "причина"] [--tags a,b] [--disable]
-                                       [--era before|after] [--lowres]   (era: для платформи yt, не змішувати «до» і «після»)
+                                       [--era before|after] [--lowres] [--unsensitive] [--enable]
+                       (--era і --lowres використовує лише Pro-режим; --unsensitive і --enable знімають позначки)
 
 Опис має бути точним і конкретним: «жінка рахує купюри за столом, вид зверху; під фрази про гроші, дохід, оплату».
 Агент дивиться контактний лист (preview/library/NN.png), пише описи сам і показує вам; чутливі кадри
@@ -124,6 +125,10 @@ def describe(args):
             c["tags"] = [t.strip() for t in rest[i + 1].split(",") if t.strip()]; i += 2
         elif rest[i] == "--disable":
             c["disabled"] = True; i += 1
+        elif rest[i] == "--unsensitive":
+            c["sensitive"], c["sensitive_reason"] = False, ""; i += 1
+        elif rest[i] == "--enable":
+            c["disabled"] = False; i += 1
         elif rest[i] == "--era":
             c["era"] = rest[i + 1]; i += 2
         elif rest[i] == "--lowres":
