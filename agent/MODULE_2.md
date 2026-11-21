@@ -4,13 +4,13 @@
 
 **Результат:** Готові креативи 9:16 і 4:5 з перевіркою файлів  
 **Потрібно:** Python, ffmpeg, свої сирі відео; для Pro-режиму ще Node.js  
-**Статус:** Простий режим і Pro перевірені на реальному відео українською (обидва формати, контроль файлів). Музику не перевіряв; Pro чистим агентом лише за PDF ще не проганявся.
+**Статус:** Простий режим і Pro перевірені на реальному відео українською (обидва формати, контроль файлів). Pro пройшов установлення з нуля чистим агентом. Не перевіряв: музику, стоки наживо, macOS і Linux.
 
 ## GOAL
 - З сирих дублів зробити рекламні креативи 9:16 і 4:5 (вирізати паузи й невдалі дублі, хук-плашка, субтитри, перебивки, музика). Режими: простий (нижче) і Pro (2-video/pro/SKILL.md: Node.js, Remotion; якість вища). Запитай, який потрібен; Pro лише після згоди на встановлення.
 
 ## READ_FIRST
-- 2-video/SKILL.md (повний процес), 2-video/README.md (встановлення), 2-video/references/ad_creatives.md, 2-video/references/pitfalls.md.
+- 2-video/SKILL.md (повний процес), 2-video/README.md (встановлення), 2-video/references/ad_creatives.md, 2-video/references/editing_rules.md (правила якісного монтажу), 2-video/references/pitfalls.md.
 
 ## ASK_USER (по одному)
 - Папка з сирими відео; мова відео (uk, ru, en: автовизначення на суржику помиляється); що рекламуємо, оффер і заклик.
@@ -20,8 +20,8 @@
 - 0) python 2-video/scripts/vm_config.py. Є «ПРОБЛЕМА»: поясни, що встановити (ffmpeg з офіційного сайту; pip install faster-whisper numpy), дочекайся згоди.
 - 1) Створи VM_ROOT/projects/<назва>. Усі ad_creatives/* запускай З цієї папки.
 - 2) python 2-video/ad_creatives/make_proxies.py <папка_сирих>   (проксі 1080x1920, 30 fps)
-- 3) python 2-video/ad_creatives/transcribe_medium.py --lang <мова> <клі1> <клі2>   (довго, у фоні, не паралельно з рендером). Перший запуск сам завантажує модель Whisper з Hugging Face (~1,5 ГБ для medium): спершу запитай згоду. Інша модель: --model large-v3-turbo. Файл результату завжди *.words_m.json.
-- 4) python 2-video/ad_creatives/tl_inspect.py <клі>: покажи користувачу фрази, узгодь exclude/fixes.
+- 3) python 2-video/ad_creatives/transcribe_medium.py --lang <мова> <кліп1> <кліп2>   (довго, у фоні, не паралельно з рендером). Перший запуск сам завантажує модель Whisper з Hugging Face (~1,5 ГБ для medium): спершу запитай згоду. Інша модель: --model large-v3-turbo. Файл результату завжди *.words_m.json.
+- 4) python 2-video/ad_creatives/tl_inspect.py <кліп>: покажи користувачу фрази, узгодь exclude/fixes.
 - 4б) Перебивки: library_catalog.py scan і describe (опис кадрів за контактним листом), нові кадри з Mixkit/Pexels/Pixabay: знайди сам, покажи сторінку, за згодою fetch_stock.py add --yes (без ключів); plan_broll.py brief і check; кадри ДОСЛІВНО за змістом, закрий склейки.
 - 5) Склади creatives.json за зразком creatives.example.json. Хук: лише те, що звучить у відео або підтверджено користувачем.
 - 6) Семпл: python 2-video/ad_creatives/build_creative.py creatives.json <name>. Покажи кадри (початок, середина, кінець). Повний набір лише після «ок».
